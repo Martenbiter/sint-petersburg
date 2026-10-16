@@ -1,0 +1,1355 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sint-Petersburg</title>
+<meta name="theme-color" content="#123d2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Sint-Petersburg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prata&family=PT+Sans:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* Layout: a real table top. Rivals sit along the top edge, the framed game board (score track, four draw piles, two card rows) is centre stage, your own table with banknotes, hand and city sits below, and one sticky action bar holds the turn. Single committed light "Winter Palace" look. */
+:root{
+  --facade:#dde8e1; --ivory:#fbf8f1; --ink:#1a2922; --ink-soft:#4b5c53; --line:#c9d6cd;
+  --emerald:#123d2e; --emerald-2:#1d5743; --gold:#7d5f17; --gold-hi:#d9b55c; --gold-line:#c8a24b; --cream:#f7eed7;
+  --board:#e4eeef; --board-2:#d3e2e4; --slot:#f3f8f8;
+  --danger:#9a2d1f;
+  --worker:#25522f; --building:#1e3a66; --aristocrat:#8b4416;
+  --f-display:"Prata", Georgia, "Times New Roman", serif;
+  --f-body:"PT Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --r:12px;
+  color-scheme: light;
+}
+html,body{min-height:100%}
+body{background:var(--facade);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0;-webkit-tap-highlight-color:transparent}
+html.groot body{font-size:19px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--gold-hi);outline-offset:2px}
+h1,h2,h3{font-family:var(--f-display);font-weight:400;margin:0;text-wrap:balance}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--ink-soft)}
+
+/* buttons */
+.btn{border:1.5px solid var(--emerald);background:var(--ivory);color:var(--emerald);border-radius:999px;padding:.5em 1.1em;font-weight:700;min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:.4em}
+.btn:hover{background:#eef3ef}
+.btn.primary{background:var(--emerald);color:var(--cream)}
+.btn.primary:hover{background:var(--emerald-2)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.small{min-height:36px;padding:.3em .9em;font-size:.9em}
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.seg button{border:1.5px solid var(--line);background:var(--ivory);border-radius:10px;padding:.5em 1em;min-height:44px;font-weight:700;color:var(--ink-soft)}
+.seg button[aria-pressed="true"]{border-color:var(--emerald);background:var(--emerald);color:var(--cream)}
+
+/* card */
+.card{all:unset;box-sizing:border-box;container-type:inline-size;position:relative;display:block;width:100%;max-width:100%;aspect-ratio:5/7;background:var(--c,var(--worker));border-radius:9px;color:var(--cream);cursor:pointer;box-shadow:0 1px 0 rgba(10,40,28,.25),0 3px 8px rgba(18,61,46,.2);transition:transform .15s}
+.card:hover{transform:translateY(-2px)}
+.card:focus-visible{outline:3px solid var(--gold-hi);outline-offset:2px}
+.card.t-worker{--c:var(--worker)} .card.t-building{--c:var(--building)} .card.t-aristocrat{--c:var(--aristocrat)}
+.card .in{position:absolute;inset:4%;border:1px solid var(--gold-line);border-radius:6px;display:flex;flex-direction:column;align-items:center;padding:3% 4% 5%}
+/* ruilkaarten: omgekeerd (licht perkament met gekleurde rand), zodat ze meteen opvallen */
+.card.trade{background:#f6edd3;color:var(--c);--cut:#f6edd3;box-shadow:inset 0 0 0 4px var(--c),0 1px 0 rgba(10,40,28,.25),0 3px 8px rgba(18,61,46,.2)}
+.card.trade .in{border:1.5px dashed var(--c)}
+.card.trade .art{color:var(--c)}
+.card.trade .art .g{fill:#b08a2c}
+.card.trade .art .sg{stroke:#b08a2c}
+.card.trade .yield{color:var(--c)}
+.card.trade .yield .sq,.card.trade .yield .dsc{border-color:var(--c)}
+.card.trade .nm{color:#1a2922}
+.card.trade .ty{background:var(--c);color:var(--cream);border-radius:999px;padding:1px 6px}
+.card.trade .cost{box-shadow:0 0 0 2px var(--c)}
+.card.trade.mini::after{content:"⇄";position:absolute;bottom:4%;left:50%;transform:translateX(-50%);font-size:clamp(9px,18cqw,14px);font-weight:700;color:var(--c)}
+.card .cost{position:absolute;top:-3%;left:-3%;width:27cqw;height:27cqw;border-radius:50%;background:var(--gold-hi);color:var(--emerald);font-weight:700;display:grid;place-items:center;font-size:clamp(11px,15cqw,20px);box-shadow:0 0 0 2px var(--c,var(--worker))}
+.card .cost.disc{background:#f6e39e;box-shadow:0 0 0 2px var(--c),0 0 0 4px var(--gold-hi)}
+.card .cost.na{background:#b9b2a0}
+.card .yield{position:absolute;top:2%;right:4%;font-size:clamp(10px,12.5cqw,16px);font-weight:700;text-align:right;line-height:1.15;color:var(--gold-hi)}
+.card .yield .sq{display:inline-block;width:.55em;height:.8em;border:1px solid var(--cream);vertical-align:-.05em;margin-left:1px}
+.card .yield .dsc{display:inline-block;padding:0 .25em;border-radius:3px;color:var(--cream);border:1px solid var(--cream)}
+.card .art{width:100%;flex:1;min-height:0;margin-top:22cqw;color:var(--cream)}
+.card .nm{font-family:var(--f-display);font-size:clamp(10px,12.5cqw,19px);text-align:center;line-height:1.1;overflow-wrap:anywhere;hyphens:auto;margin-top:2%}
+.card .ty{font-size:clamp(8px,8.5cqw,12px);color:var(--gold-hi);text-transform:uppercase;letter-spacing:.08em;margin-top:2%}
+.card.dim{filter:saturate(.45) brightness(.85)}
+.card.tip{outline:4px solid var(--gold);outline-offset:3px;animation:pulse 1.2s ease-in-out 3}
+@keyframes pulse{50%{outline-color:transparent}}
+.card.mini .cost,.card.mini .nm,.card.mini .ty{display:none}
+.card.mini .art{margin-top:30cqw}
+.card.mini .yield{font-size:clamp(9px,15cqw,13px)}
+.art .g{fill:var(--gold-hi)} .art .d{fill:var(--cut,var(--c,var(--worker)))} .art .s{fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round} .art .sg{fill:none;stroke:var(--gold-hi);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round} .art .sd{fill:none;stroke:var(--cut,var(--c,var(--worker)));stroke-width:2;stroke-linecap:round}
+
+/* banknotes */
+.purse{display:flex;align-items:center;gap:14px}
+.notes{position:relative;height:var(--nh);flex:none}
+.bill{position:absolute;top:0;width:var(--nw);height:var(--nh);box-sizing:border-box;border-radius:3px;background:var(--bb);border:3px solid var(--bc);box-shadow:0 1px 3px rgba(20,40,30,.3);display:flex;align-items:center;justify-content:flex-start;padding-left:3px}
+.bill::before{content:"";position:absolute;inset:2px;border:1px dotted var(--bc);border-radius:2px;opacity:.7}
+.bill b{position:relative;width:calc(var(--nh) * .62);height:calc(var(--nh) * .62);border-radius:50%;background:#8f8473;color:#fff;font-size:calc(var(--nh) * .32);display:grid;place-items:center;box-shadow:inset 0 0 0 1.5px #c9bfae}
+.bill.v1{--bc:#7d7286;--bb:#ece8ee} .bill.v2{--bc:#4877b0;--bb:#e5eef8} .bill.v5{--bc:#4f8e3e;--bb:#e8f2e1} .bill.v10{--bc:#c79b1c;--bb:#faf2d6} .bill.v20{--bc:#b8463a;--bb:#f8e5e1}
+.purse .total{font-family:var(--f-display);font-size:1.6em;color:var(--emerald);line-height:1}
+.purse .total small{display:block;font-family:var(--f-body);font-size:.5em;color:var(--ink-soft)}
+.minibill{display:inline-flex;align-items:center;gap:4px;font-weight:700}
+.minibill i{width:20px;height:12px;border-radius:2px;border:2px solid #b8463a;background:#f8e5e1;box-sizing:border-box;display:inline-block}
+
+/* pawn */
+.pawn{display:inline-block;flex:none;vertical-align:middle}
+
+/* start */
+.start{max-width:880px;margin:0 auto;padding-block:24px 40px;display:grid;gap:24px}
+.skyline{width:100%;height:auto;color:var(--emerald);display:block}
+.skyline .g{fill:var(--gold-hi)} .skyline .d{fill:var(--facade)} .skyline .sg{fill:none;stroke:var(--gold);stroke-width:2}
+.start-hero{display:grid;gap:8px;text-align:center}
+.start-hero h1{font-size:clamp(2.2rem,7vw,3.6rem);color:var(--emerald);letter-spacing:.02em}
+.start-hero p{color:var(--ink-soft);margin:0;font-size:1.05em}
+.start-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;align-items:start}
+@media (min-width:760px){.start-grid{grid-template-columns:minmax(0,5fr) minmax(0,6fr)}}
+.fan{display:flex;justify-content:center;padding:12px 0 8px;min-height:200px}
+.fan .card{width:118px;flex:none;margin:0 -14px;pointer-events:none}
+.fan .card:nth-child(1){transform:rotate(-9deg) translateY(10px)} .fan .card:nth-child(3){transform:rotate(9deg) translateY(10px)}
+.panel{background:var(--ivory);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.form{display:grid;gap:18px}
+.form label,.form .lbl{display:block;font-weight:700;margin-bottom:6px}
+.form input[type=text]{width:100%;box-sizing:border-box;border:1.5px solid var(--line);border-radius:10px;padding:.6em .8em;font:inherit;background:#fff;min-height:44px}
+.hint{color:var(--ink-soft);font-size:.9em;margin:6px 0 0}
+.check{display:flex;gap:10px;align-items:center;font-weight:700}
+.check input{width:22px;height:22px;accent-color:var(--emerald)}
+.start-actions{display:flex;flex-wrap:wrap;gap:10px}
+
+/* game frame */
+.game{max-width:1080px;margin:0 auto;display:grid;gap:14px;padding-block:12px 20px}
+.top{display:flex;align-items:center;gap:12px}
+.brand{font-family:var(--f-display);font-size:1.3em;color:var(--emerald)}
+.rnd{color:var(--ink-soft);font-weight:700}
+.rnd .last{color:var(--danger)}
+.top .btn{margin-left:auto}
+
+/* rivals */
+.rivals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.rival{all:unset;box-sizing:border-box;cursor:pointer;background:var(--ivory);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:grid;gap:6px}
+.rival:focus-visible{outline:3px solid var(--gold-hi)}
+.rival.turn{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-hi) inset}
+.rival-h{display:flex;align-items:center;gap:8px}
+.rival-h b{font-family:var(--f-display);font-weight:400;font-size:1.1em;color:var(--emerald)}
+.rival-h small{color:var(--ink-soft);font-size:.78em}
+.rival-s{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.9em;align-items:center}
+.counts{display:flex;gap:4px}
+.counts span{min-width:22px;height:20px;border-radius:4px;color:var(--cream);font-size:.78em;font-weight:700;display:grid;place-items:center;padding:0 4px;box-sizing:border-box}
+.thinking{font-size:.8em;font-weight:700;color:var(--gold)}
+
+/* board */
+.board{background:var(--board);border:6px solid var(--emerald);border-radius:16px;box-shadow:inset 0 0 0 2px var(--gold-hi),0 6px 18px rgba(18,61,46,.18);padding:16px;display:grid;gap:14px;position:relative;overflow:hidden}
+.board > *{position:relative}
+.board > .wm{position:absolute;left:0;right:0;bottom:0;width:100%;height:auto;opacity:.1;pointer-events:none;color:var(--building)}
+.board .wm .g,.board .wm .d{fill:currentColor} .board .wm .sg{stroke:currentColor;fill:none}
+.track{padding:14px 4px 14px}
+.track-bar{position:relative;height:16px;display:flex;border-radius:3px;box-shadow:0 0 0 1.5px var(--emerald)}
+.track-bar > span{flex:1;background:var(--slot)} .track-bar > span:nth-child(even){background:var(--board-2)}
+.track-bar em{position:absolute;top:19px;font-style:normal;font-size:.7em;color:var(--ink-soft);transform:translateX(-50%)}
+.track-pawn{position:absolute;bottom:2px;transform:translateX(-50%);transition:left .6s ease;line-height:0}
+.track-pawn sup{position:absolute;top:-12px;left:50%;transform:translateX(-50%);font-size:.65em;line-height:1;font-weight:700;color:var(--emerald);white-space:nowrap}
+.decks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.deck{display:grid;justify-items:center;align-content:start;gap:4px;text-align:center;min-width:0;padding:8px 4px 10px;border-radius:12px;transition:opacity .3s,background .3s}
+.deck.d-worker{--pc:var(--worker)} .deck.d-building{--pc:var(--building)} .deck.d-aristocrat{--pc:var(--aristocrat)} .deck.d-trade{--pc:#5a4a1c}
+.decks.live .deck:not(.cur){opacity:.5}
+.deck.cur{background:var(--pc);color:var(--cream);box-shadow:0 0 0 3px var(--gold-hi),0 6px 14px rgba(18,61,46,.25)}
+.deck.cur .back{box-shadow:inset 0 0 0 3px var(--c),inset 0 0 0 4.5px var(--cream),0 0 0 2px var(--gold-hi)}
+.deck.cur .starter{color:#eef3ef}
+.back{width:min(72px,100%);aspect-ratio:5/4;border-radius:8px;background:var(--c);box-shadow:inset 0 0 0 3px var(--c),inset 0 0 0 4.5px var(--gold-hi),0 3px 0 -1px var(--c),0 5px 0 -1px rgba(0,0,0,.25);display:grid;place-items:center;color:var(--cream);position:relative}
+.back svg{width:56%;height:auto}
+.back.worker{--c:var(--worker)} .back.building{--c:var(--building)} .back.aristocrat{--c:var(--aristocrat)}
+.back.trade{background:linear-gradient(90deg,var(--worker) 0 33%,var(--building) 0 66%,var(--aristocrat) 0);--c:var(--building)}
+.back .cnt{position:absolute;bottom:-8px;right:-8px;background:var(--ivory);color:var(--emerald);border:1.5px solid var(--emerald);border-radius:999px;font-size:.72em;font-weight:700;padding:0 6px}
+.deck b{font-size:.85em;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.deck.cur b{color:var(--cream);font-size:1.05em;white-space:normal;overflow-wrap:anywhere;hyphens:auto}
+@media (max-width:520px){.deck.cur b{font-size:.9em}}
+.deck .starter{font-size:.75em;color:var(--ink-soft);display:flex;align-items:center;gap:4px;white-space:nowrap;max-width:100%;overflow:hidden}
+.deck .now{font-size:.75em;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--emerald);background:var(--gold-hi);border-radius:999px;padding:2px 10px}
+.phasepill{background:var(--pc);color:var(--cream);border-radius:999px;padding:3px 12px;font-weight:700;font-size:.95em;white-space:nowrap;box-shadow:0 0 0 2px var(--gold-hi)}
+.phasepill.worker{--pc:var(--worker)} .phasepill.building{--pc:var(--building)} .phasepill.aristocrat{--pc:var(--aristocrat)} .phasepill.trade{--pc:#5a4a1c}
+.ab-msg .phasepill{font-size:.85em;flex:none}
+.top{flex-wrap:wrap}
+.rowlbl{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-family:var(--f-display);color:var(--emerald)}
+.rowlbl span{font-family:var(--f-body);font-size:.8em;color:var(--ink-soft)}
+.rowlbl .plaque{font-family:var(--f-body);font-weight:700;font-size:.78em;background:var(--gold-hi);color:var(--emerald);border-radius:4px;padding:0 6px}
+.slots{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (min-width:760px){.slots{grid-template-columns:repeat(8,minmax(0,1fr))}}
+.slot{aspect-ratio:5/7;border-radius:9px;border:1.5px dashed #a9c0c2;background:rgba(255,255,255,.45)}
+.bonus{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:.8em}
+.bonus-wrap{overflow-x:auto;max-width:100%}
+.bonus table{border-collapse:collapse;background:var(--ivory)}
+.bonus td{border:1px solid #d5b48a;text-align:center;padding:1px 5px;font-variant-numeric:tabular-nums}
+.bonus tr:first-child td{background:#f1c48f;color:#5a2a08;font-weight:700}
+.bonus td.me{background:var(--emerald)!important;color:var(--cream);font-weight:700}
+.bonus p{margin:0;color:var(--ink-soft);max-width:34ch}
+
+/* my table */
+.mytable{background:var(--ivory);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px 18px;display:grid;gap:16px}
+.mytable.turn{box-shadow:0 0 0 2px var(--emerald) inset}
+.mt-head{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.mt-head h2{font-size:1.4em;color:var(--emerald)}
+.vpbadge{background:var(--emerald);color:var(--cream);border-radius:999px;padding:2px 12px;font-weight:700}
+.mt-top{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+@media (min-width:760px){.mt-top{grid-template-columns:minmax(0,2fr) minmax(0,3fr)}}
+.zone{min-width:0}
+.zone h3{font-size:1.05em;color:var(--emerald);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}
+.zone h3 small{font-family:var(--f-body);font-size:.75em;color:var(--ink-soft)}
+.handslots{display:grid;grid-template-columns:repeat(4,minmax(0,92px));gap:10px}
+html.groot .handslots{grid-template-columns:repeat(4,minmax(0,110px))}
+.tableau{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.tgroup{border-top:3px solid var(--c);padding-top:8px;display:grid;gap:8px;align-content:start}
+.tgroup.worker{--c:var(--worker)} .tgroup.building{--c:var(--building)} .tgroup.aristocrat{--c:var(--aristocrat)}
+.tgroup h4{margin:0;font-size:.9em;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.tgroup h4 span{color:var(--ink-soft);font-weight:400}
+.minis{display:flex;flex-wrap:wrap;gap:8px}
+.mini-wrap{position:relative;width:52px}
+html.groot .mini-wrap{width:62px}
+.mini-wrap i{position:absolute;bottom:-6px;right:-6px;font-style:normal;background:var(--gold-hi);color:var(--emerald);border-radius:999px;font-size:.72em;font-weight:700;padding:0 5px;border:1.5px solid var(--ivory)}
+.mini-wrap.new .card{animation:glow 1.4s ease-out 1}
+@keyframes glow{0%{box-shadow:0 0 0 6px var(--gold-hi)}100%{box-shadow:0 0 0 0 transparent}}
+.none{color:var(--ink-soft);font-size:.88em}
+
+/* action bar */
+.actionbar{position:sticky;bottom:0;z-index:20;margin-left:calc(-1 * max(16px,env(safe-area-inset-left,0px)));margin-right:calc(-1 * max(16px,env(safe-area-inset-right,0px)));background:var(--emerald);color:var(--cream);border-top:3px solid var(--gold-hi);padding:10px max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.ab-in{max-width:1080px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.ab-msg{flex:1 1 260px;min-width:0;display:flex;gap:10px;align-items:center}
+.ab-msg > div{display:grid;min-width:0}
+.ab-msg b{font-size:1.05em}
+.ab-msg span{font-size:.88em;color:#cfe0d6;overflow-wrap:anywhere}
+.ab-btns{display:flex;gap:8px;flex-wrap:wrap}
+.actionbar .btn{border-color:var(--gold-hi);background:transparent;color:var(--cream)}
+.actionbar .btn.primary{background:var(--gold-hi);color:var(--emerald)}
+.actionbar .btn:disabled{opacity:.35}
+
+/* banner + toast */
+.banner{position:fixed;left:0;right:0;top:38%;z-index:30;pointer-events:none;display:flex;justify-content:center;padding-inline:max(16px,env(safe-area-inset-left,0px))}
+.banner div{background:var(--emerald);color:var(--cream);border:2px solid var(--gold-hi);border-radius:14px;padding:14px 28px;text-align:center;box-shadow:0 10px 30px rgba(10,40,28,.35);animation:bann 1.9s ease forwards}
+.banner small{display:block;color:var(--gold-hi);letter-spacing:.12em;text-transform:uppercase;font-size:.78em;font-weight:700}
+.banner strong{font-family:var(--f-display);font-weight:400;font-size:1.7em}
+@keyframes bann{0%{opacity:0;transform:scale(.92)}12%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+.toast{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:35;background:#f6ecc9;color:#4a3608;border:1.5px solid var(--gold-line);border-radius:12px;padding:10px 16px;box-shadow:0 8px 20px rgba(10,40,28,.25);width:max-content;max-width:min(560px,calc(100vw - 32px));box-sizing:border-box;font-size:.95em;pointer-events:none;animation:toast 4.5s ease forwards}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,-8px)}8%{opacity:1;transform:translate(-50%,0)}85%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.banner div,.card.tip,.mini-wrap.new .card,.toast{animation:none}.banner{display:none}.card,.track-pawn{transition:none}}
+
+/* move toast, rival last move, last-round ribbon, score overview */
+.movetoast{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:35;display:flex;align-items:center;gap:12px;background:var(--ivory);border:2px solid var(--gold-hi);border-radius:14px;padding:8px 16px 8px 8px;box-shadow:0 10px 26px rgba(10,40,28,.3);width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;pointer-events:none;animation:mt var(--d,2s) ease forwards}
+.movetoast .mini-wrap{width:62px;flex:none}
+.movetoast.pass{padding:10px 18px;border-color:var(--line);background:#eef3ef}
+.movetoast b{display:flex;align-items:center;gap:6px;font-family:var(--f-display);font-weight:400;color:var(--emerald);font-size:1.25em}
+.movetoast span{font-size:1.1em;font-weight:700}
+@keyframes mt{0%{opacity:0;transform:translate(-50%,-10px)}10%{opacity:1;transform:translate(-50%,0)}85%{opacity:1}100%{opacity:0}}
+.lastmove{font-size:.85em;font-weight:700;background:#f6ecc9;color:#4a3608;border:1px solid var(--gold-line);border-radius:8px;padding:3px 8px;justify-self:start;max-width:100%;overflow-wrap:anywhere}
+.lastmove.pass{background:var(--facade);color:var(--ink-soft);border-color:var(--line);font-weight:400}
+.lastribbon{background:var(--danger);color:#fff;border-radius:8px;padding:8px 12px;font-weight:700;text-align:center;box-shadow:inset 0 0 0 2px var(--gold-hi)}
+.ovs{display:grid;gap:10px}
+.ovs-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--facade)}
+.ovs-row.me{background:#f6ecc9;box-shadow:inset 0 0 0 1.5px var(--gold-line)}
+.ovs-row .who{font-family:var(--f-display);font-size:1.15em;color:var(--emerald)}
+.ovs-row .gain{font-size:1.35em;font-weight:700;display:flex;gap:12px;align-items:center;white-space:nowrap}
+.ovs-row .gain .zero{font-size:.75em;font-weight:400;color:var(--ink-soft)}
+.ovs-row .after{grid-column:2 / 4;font-size:.85em;color:var(--ink-soft)}
+.gainbill{display:inline-block;width:28px;height:16px;border-radius:2px;border:2.5px solid #b8463a;background:#f8e5e1;box-sizing:border-box;vertical-align:-2px;margin-right:4px}
+.ov-last{text-align:center;display:grid;gap:12px;justify-items:center}
+.ov-last .big{font-family:var(--f-display);font-size:2.2em;color:var(--danger);line-height:1.1}
+.ov-last ul{text-align:left;margin:0;padding-left:1.2em;display:grid;gap:6px}
+.autoclose{height:4px;border-radius:2px;background:var(--gold-hi);transform-origin:left;animation:shrink var(--d,6s) linear forwards}
+@keyframes shrink{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media (prefers-reduced-motion:reduce){.movetoast,.autoclose{animation:none}}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:40;background:rgba(14,36,27,.55);display:flex;align-items:flex-end;justify-content:center;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) 0 max(12px,env(safe-area-inset-left,0px))}
+@media (min-width:640px){.modal{align-items:center;padding-bottom:12px}}
+.sheet{background:var(--ivory);border-radius:18px 18px 0 0;width:100%;max-width:640px;max-height:92%;overflow:auto;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));box-sizing:border-box;display:grid;gap:14px;border-top:4px solid var(--gold-hi)}
+@media (min-width:640px){.sheet{border-radius:18px}}
+.sheet.wide{max-width:880px}
+.sheet h2{font-size:1.5em;color:var(--emerald)}
+.sheet-top{display:flex;gap:16px;align-items:flex-start}
+.sheet-top > .card{width:132px;flex:none;cursor:default}
+.sheet-top > .card:hover{transform:none}
+@media (max-width:420px){.sheet-top > .card{width:104px}}
+.sheet p{margin:0}
+.calc{background:var(--facade);border-radius:10px;padding:8px 12px;font-size:.92em}
+.reason{color:var(--danger);font-size:.9em;font-weight:700}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btns.col{flex-direction:column;align-items:stretch}
+.stepper{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.stepper output{font-size:2em;font-family:var(--f-display);min-width:1.5em;text-align:center}
+.tbl-wrap{overflow-x:auto}
+table.t{border-collapse:collapse;width:100%;font-size:.92em}
+table.t th,table.t td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.t th{color:var(--ink-soft);font-weight:700;font-size:.85em}
+table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums}
+table.t tr.win td{background:#f3ead0;font-weight:700}
+.rules{display:grid;gap:12px;max-width:65ch}
+.rules h3{font-size:1.1em;color:var(--emerald)}
+.rules ul{margin:0;padding-left:1.2em;display:grid;gap:4px}
+.note{background:#f3ead0;border:1px solid var(--gold-line);border-radius:10px;padding:10px 12px;font-size:.92em}
+.loglist{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:.92em}
+.loglist li.phase{font-weight:700;color:var(--emerald);margin-top:6px}
+.loglist li.score{color:var(--gold)}
+.loglist li.warn{color:var(--danger);font-weight:700}
+.loglist li.pass{color:var(--ink-soft)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;display:inline-block;background:var(--c);box-shadow:0 0 0 1.5px var(--gold-hi)}
+.dot.worker{--c:var(--worker)} .dot.building{--c:var(--building)} .dot.aristocrat{--c:var(--aristocrat)} .dot.trade{background:conic-gradient(var(--worker) 0 33%,var(--building) 0 66%,var(--aristocrat) 0)}
+
+/* basis */
+html,body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px)}
+html{-webkit-text-size-adjust:100%}
+button,.card,.chip,.rival{touch-action:manipulation}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+<div id="banner"></div>
+<div id="toast"></div>
+<div id="modal"></div>
+
+<script>
+'use strict';
+/* ================================================================
+   KAARTEN — eerste editie (2004), volgens het kaartoverzicht.
+   r = roebels, vp = punten, n = aantal in de doos,
+   per = 1 ₽ per kaart van dat type, disc = 1 ₽ korting op dat type.
+   ================================================================ */
+const CAT = {};
+function def(id, o){ CAT[id] = Object.assign({id, r:0, vp:0, trade:false, sp:null, per:null, disc:null, desc:''}, o); }
+// Arbeiders (groene stapel)
+def('houthakker',   {name:'Houthakker',    type:'worker', deck:'worker', cost:3, r:3, n:6, sub:'hout',   art:'axe'});
+def('goudzoeker',   {name:'Goudzoeker',    type:'worker', deck:'worker', cost:4, r:3, n:6, sub:'goud',   art:'pick'});
+def('herder',       {name:'Herder',        type:'worker', deck:'worker', cost:5, r:3, n:6, sub:'schaap', art:'sheep'});
+def('pelsjager',    {name:'Pelsjager',     type:'worker', deck:'worker', cost:6, r:3, n:6, sub:'pels',   art:'ushanka'});
+def('scheepsbouwer',{name:'Scheepsbouwer', type:'worker', deck:'worker', cost:7, r:3, n:6, sub:'schip',  art:'ship'});
+def('tsaarpeter',   {name:'Tsaar Peter',   type:'worker', deck:'worker', cost:8, r:3, n:1, sub:'*',      art:'crown', desc:'Telt als elke soort arbeider: iedere groene ruilkaart mag hem vervangen.'});
+// Gebouwen (blauwe stapel)
+def('kroeg',        {name:'Kroeg',         type:'building', deck:'building', cost:1,  n:2, sp:'pub', art:'b_kroeg', desc:'Bij elke telling van de gebouwen mag je tot 5 keer 2 ₽ betalen voor 1 punt.'});
+def('pakhuis',      {name:'Pakhuis',       type:'building', deck:'building', cost:2,  n:1, sp:'warehouse', art:'b_pakhuis', desc:'Je mag 1 kaart extra in je hand houden (4 in plaats van 3).'});
+def('potjomkin',    {name:'Potjomkindorp', type:'building', deck:'building', cost:2,  n:1, sp:'potemkin', art:'b_potjomkin', desc:'Telt als 6 ₽ wanneer je hem vervangt door een blauwe ruilkaart.'});
+def('sterrenwacht', {name:'Sterrenwacht',  type:'building', deck:'building', cost:6,  vp:1, n:2, sp:'obs', art:'b_sterren', desc:'Eén keer per gebouwenfase: trek als je beurt de bovenste kaart van een stapel naar keuze. Koop hem, neem hem in je hand of leg hem weg.'});
+def('markt',        {name:'Markt',         type:'building', deck:'building', cost:5,  vp:1, n:5, art:'b_markt'});
+def('douanehuis',   {name:'Douanehuis',    type:'building', deck:'building', cost:8,  vp:2, n:5, art:'b_douane'});
+def('brandweer',    {name:'Brandweer',     type:'building', deck:'building', cost:11, vp:3, n:4, art:'b_brand'});
+def('ziekenhuis',   {name:'Ziekenhuis',    type:'building', deck:'building', cost:14, vp:4, n:3, art:'b_zieken'});
+def('bibliotheek',  {name:'Bibliotheek',   type:'building', deck:'building', cost:17, vp:5, n:2, art:'b_biblio'});
+def('theater',      {name:'Theater',       type:'building', deck:'building', cost:20, vp:6, n:2, art:'b_theater'});
+def('academie',     {name:'Academie',      type:'building', deck:'building', cost:23, vp:7, n:1, art:'b_academie'});
+// Aristocraten (oranje stapel)
+def('schrijver',    {name:'Schrijver',     type:'aristocrat', deck:'aristocrat', cost:4,  r:1,       n:5, art:'p_schrijver'});
+def('bestuurder',   {name:'Bestuurder',    type:'aristocrat', deck:'aristocrat', cost:7,  r:2,       n:5, art:'p_bestuurder'});
+def('rentmeester',  {name:'Rentmeester',   type:'aristocrat', deck:'aristocrat', cost:10, r:3,       n:5, art:'p_rentmeester'});
+def('secretaris',   {name:'Secretaris',    type:'aristocrat', deck:'aristocrat', cost:12, r:4,       n:4, art:'p_secretaris'});
+def('controleur',   {name:'Controleur',    type:'aristocrat', deck:'aristocrat', cost:14, r:4, vp:1, n:3, art:'p_controleur'});
+def('rechter',      {name:'Rechter',       type:'aristocrat', deck:'aristocrat', cost:16, r:5, vp:2, n:3, art:'p_rechter'});
+def('hofdame',      {name:'Hofdame',       type:'aristocrat', deck:'aristocrat', cost:18, r:6, vp:3, n:2, art:'p_hofdame'});
+// Ruilkaarten: arbeiders
+def('werkplaats',   {name:'Timmerwerkplaats', type:'worker', deck:'trade', trade:true, cost:4,  r:3,       n:2, sub:'hout',   disc:'building',   art:'saw', desc:'Je betaalt 1 ₽ minder voor elk gebouw (blauwe kaart).'});
+def('smelterij',    {name:'Goudsmelterij', type:'worker', deck:'trade', trade:true, cost:6,  r:3,       n:2, sub:'goud',   disc:'aristocrat', art:'furnace', desc:'Je betaalt 1 ₽ minder voor elke aristocraat (oranje kaart).'});
+def('weverij',      {name:'Weverij',       type:'worker', deck:'trade', trade:true, cost:8,  r:6,       n:2, sub:'schaap', art:'spool'});
+def('bontwinkel',   {name:'Bontwinkel',    type:'worker', deck:'trade', trade:true, cost:10, r:3, vp:2, n:2, sub:'pels',   art:'coat'});
+def('werf',         {name:'Scheepswerf',   type:'worker', deck:'trade', trade:true, cost:12, r:6, vp:1, n:2, sub:'schip',  art:'slipway'});
+// Ruilkaarten: gebouwen
+def('mariinski',    {name:'Mariinski-theater', type:'building', deck:'trade', trade:true, cost:10, per:'aristocrat', n:1, art:'b_mariinski', desc:'Levert 1 ₽ op voor elke aristocraat die je hebt.'});
+def('bank',         {name:'Bank',          type:'building', deck:'trade', trade:true, cost:13, r:5, vp:1, n:1, art:'b_bank'});
+def('peterhof',     {name:'Peterhof',      type:'building', deck:'trade', trade:true, cost:14, r:4, vp:2, n:1, art:'b_peterhof'});
+def('isaak',        {name:'Isaäkkathedraal', type:'building', deck:'trade', trade:true, cost:15, r:3, vp:3, n:1, art:'b_isaak'});
+def('haven',        {name:'Haven',         type:'building', deck:'trade', trade:true, cost:16, r:5, vp:2, n:1, art:'b_haven'});
+def('opstanding',   {name:'Opstandingskerk', type:'building', deck:'trade', trade:true, cost:16, r:2, vp:4, n:1, art:'b_opstanding'});
+def('catharina',    {name:'Catharinapaleis', type:'building', deck:'trade', trade:true, cost:17, r:1, vp:5, n:1, art:'b_catharina'});
+def('smolny',       {name:'Smolny-kathedraal', type:'building', deck:'trade', trade:true, cost:17, r:4, vp:3, n:1, art:'b_smolny'});
+def('hermitage',    {name:'Hermitage',     type:'building', deck:'trade', trade:true, cost:18, r:3, vp:4, n:1, art:'b_hermitage'});
+def('winterpaleis', {name:'Winterpaleis',  type:'building', deck:'trade', trade:true, cost:19, r:2, vp:5, n:1, art:'b_winter'});
+// Ruilkaarten: aristocraten
+def('priester',     {name:'Priester',      type:'aristocrat', deck:'trade', trade:true, cost:6,  r:1, vp:1, n:1, art:'p_priester'});
+def('wapenmeester', {name:'Wapenmeester',  type:'aristocrat', deck:'trade', trade:true, cost:8,  r:4,       n:1, art:'p_wapenmeester'});
+def('kamenierster', {name:'Kamenierster',  type:'aristocrat', deck:'trade', trade:true, cost:8,  vp:2,      n:1, art:'p_kamenierster'});
+def('bouwmeester',  {name:'Bouwmeester',   type:'aristocrat', deck:'trade', trade:true, cost:10, r:5,       n:1, art:'p_bouwmeester'});
+def('senator',      {name:'Senator',       type:'aristocrat', deck:'trade', trade:true, cost:12, r:2, vp:2, n:1, art:'p_senator'});
+def('patriarch',    {name:'Patriarch',     type:'aristocrat', deck:'trade', trade:true, cost:16, vp:4,      n:1, art:'p_patriarch'});
+def('tollenaar',    {name:'Belastinginner', type:'aristocrat', deck:'trade', trade:true, cost:17, per:'worker', n:1, art:'p_tollenaar', desc:'Levert 1 ₽ op voor elke arbeider die je hebt.'});
+def('admiraal',     {name:'Admiraal',      type:'aristocrat', deck:'trade', trade:true, cost:18, r:3, vp:3, n:1, art:'p_admiraal'});
+def('minister',     {name:'Minister',      type:'aristocrat', deck:'trade', trade:true, cost:20, r:2, vp:4, n:1, art:'p_minister'});
+def('tsaar',        {name:'Tsaar',         type:'aristocrat', deck:'trade', trade:true, cost:24, vp:6,      n:1, art:'p_tsaar'});
+
+const PH = [
+  {key:'worker',     name:'Arbeiders',    deck:'worker'},
+  {key:'building',   name:'Gebouwen',     deck:'building'},
+  {key:'aristocrat', name:'Aristocraten', deck:'aristocrat'},
+  {key:'trade',      name:'Ruilkaarten',  deck:'trade'}];
+const TYPE_PH = {worker:0, building:1, aristocrat:2};
+const TYPE_NL = {worker:'Arbeider', building:'Gebouw', aristocrat:'Aristocraat'};
+const TYPE_PL = {worker:'arbeider', building:'gebouw', aristocrat:'aristocraat'};
+const DECK_NL = {worker:'Arbeiders', building:'Gebouwen', aristocrat:'Aristocraten', trade:'Ruilkaarten'};
+const LEVEL_NL = {easy:'Makkelijk', medium:'Gemiddeld', hard:'Moeilijk'};
+const ROW = 8, START_MONEY = 25, HAND = 3, HAND_PENALTY = 5;
+const ARI = [0,1,3,6,10,15,21,28,36,45,55];
+const BOT_NAMES = ['Anna','Boris','Katja'];
+const PAWN = ['#b3261e','#5b3a9b','#2e2e2e','#f3efe3'];
+const SAVE_KEY = 'spb-nl-2';
+
+/* ================================================================
+   SPELREGELS (engine)
+   ================================================================ */
+let S = null;
+let settings = {name:'Jij', bots:2, level:'medium', speed:'normal', big:false};
+let undoSnap = null;
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+const C = inst => CAT[inst.id];
+function note(pi, short, id){ S.players[pi].lastMove = short; S.move = {pi, txt:S.lastAct, id:id || null, short}; S.moveId = (S.moveId || 0) + 1; }
+function addLog(txt, cls){ S.log.push({txt, cls:cls||''}); if(S.log.length>120) S.log.shift(); }
+
+function newGame(){
+  const n = settings.bots + 1;
+  const decks = {worker:[], building:[], aristocrat:[], trade:[]};
+  let uid = 0;
+  const off = Math.floor(Math.random() * n); // willekeurige startspeler
+  for(const c of Object.values(CAT)) for(let k=0;k<c.n;k++) decks[c.deck].push({u:'k'+(uid++), id:c.id});
+  for(const d in decks) shuffle(decks[d]);
+  S = {players:[], decks, deckSize:{}, upper:[], lower:[], round:1, phase:0,
+       markers:[0,1,2,3].map(i => (i + off) % n), cur:0, passes:0, lastRound:false,
+       log:[], pending:null, over:false, lastAct:'', lastScore:null, scoreId:0, flash:null, bannerId:0, final:null};
+  for(const d in decks) S.deckSize[d] = decks[d].length;
+  const mk = (name, bot) => ({name, bot, money:START_MONEY, vp:0, cards:[], hand:[], obsUsed:false});
+  S.players.push(mk((settings.name||'').trim() || 'Jij', null));
+  for(let i=0;i<settings.bots;i++) S.players.push(mk(BOT_NAMES[i], settings.level));
+  undoSnap = null;
+  addLog(`Nieuw spel met ${n} spelers. Iedereen begint met ${START_MONEY} ₽.`);
+  startPhase();
+}
+
+function startPhase(){
+  const ph = PH[S.phase], deck = S.decks[ph.deck];
+  const need = Math.max(0, ROW - S.upper.length - S.lower.length);
+  const k = Math.min(need, deck.length);
+  for(let i=0;i<k;i++) S.upper.push(deck.shift());
+  if(need > 0 && deck.length === 0 && !S.lastRound){
+    S.lastRound = true;
+    S.announceDeck = ph.name; S.announceId = (S.announceId || 0) + 1;
+    addLog(`De stapel ${ph.name} is op. Dit is de laatste ronde!`, 'warn');
+  }
+  if(S.phase === 1) S.players.forEach(p => p.obsUsed = false);
+  S.players.forEach(p => p.lastMove = null);
+  S.cur = S.markers[S.phase]; S.passes = 0;
+  undoSnap = null;
+  S.bannerId++;
+  addLog(`Ronde ${S.round} · ${ph.name}. ${S.players[S.cur].name} begint.`, 'phase');
+}
+
+const handLimit = p => HAND + p.cards.filter(x => C(x).sp === 'warehouse').length;
+const owned = (p, id) => p.cards.filter(x => x.id === id).length;
+const countType = (p, type) => p.cards.filter(x => C(x).type === type).length;
+const discFor = (p, type) => p.cards.filter(x => C(x).disc === type).length;
+const replValue = c => c.sp === 'potemkin' ? 6 : c.cost;
+const rowArr = src => src === 'upper' ? S.upper : src === 'lower' ? S.lower : null;
+const incomeOf = (p, c) => c.per ? countType(p, c.per) : c.r;
+function replOptions(p, c){
+  if(!c.trade) return null;
+  return p.cards.filter(x => {
+    const o = C(x); if(o.type !== c.type || o.trade) return false; // alleen gewone kaarten vervangen
+    if(c.type === 'worker') return o.sub === c.sub || o.sub === '*';
+    return true;
+  });
+}
+function priceParts(p, c, src, rep){
+  const parts = [];
+  if(src === 'lower') parts.push([1, 'onderste rij']);
+  const o = owned(p, c.id); if(o) parts.push([o, `je hebt er al ${o}`]);
+  const d = discFor(p, c.type); if(d) parts.push([d, d > 1 ? `${d} kortingskaarten` : (c.type === 'building' ? 'Timmerwerkplaats' : 'Goudsmelterij')]);
+  if(rep) parts.push([replValue(C(rep)), `${C(rep).name} ingeleverd`]);
+  return parts;
+}
+function price(p, c, src, rep){
+  return Math.max(1, c.cost - priceParts(p, c, src, rep).reduce((s, x) => s + x[0], 0));
+}
+function buyOptions(p, inst, src){
+  const c = C(inst);
+  if(c.trade) return replOptions(p, c).map(r => ({rep:r.u, price:price(p, c, src, r)}));
+  return [{rep:null, price:price(p, c, src, null)}];
+}
+const canObs = p => S.phase === 1 && !p.obsUsed && p.cards.some(x => C(x).sp === 'obs');
+function legalActions(pi){
+  const p = S.players[pi], acts = [];
+  for(const src of ['upper','lower']) rowArr(src).forEach((inst, i) => {
+    for(const o of buyOptions(p, inst, src)) if(o.price <= p.money) acts.push({t:'buy', src, i, rep:o.rep});
+    if(p.hand.length < handLimit(p)) acts.push({t:'take', src, i});
+  });
+  p.hand.forEach((inst, i) => {
+    for(const o of buyOptions(p, inst, 'hand')) if(o.price <= p.money) acts.push({t:'buy', src:'hand', i, rep:o.rep});
+  });
+  if(canObs(p)) for(const d of Object.keys(S.decks)) if(S.decks[d].length > 1) acts.push({t:'obs', deck:d});
+  acts.push({t:'pass'});
+  return acts;
+}
+
+function placeCard(p, inst, repU, cost){
+  let rep = null;
+  if(repU){ const ri = p.cards.findIndex(x => x.u === repU); rep = p.cards.splice(ri, 1)[0]; }
+  p.money -= cost; p.cards.push(inst);
+  S.flash = {u:inst.u};
+  return rep;
+}
+
+function doAction(pi, a){
+  const p = S.players[pi];
+  if(a.t === 'pass'){
+    S.passes++; S.lastAct = `${p.name} past.`; addLog(S.lastAct, 'pass'); note(pi, 'past');
+    return advance();
+  }
+  S.passes = 0;
+  if(a.t === 'buy'){
+    const arr = a.src === 'hand' ? p.hand : rowArr(a.src);
+    const inst = arr[a.i], c = C(inst);
+    const repInst = a.rep ? p.cards.find(x => x.u === a.rep) : null;
+    const cost = price(p, c, a.src, repInst);
+    if(cost > p.money) return;
+    arr.splice(a.i, 1);
+    const rep = placeCard(p, inst, a.rep, cost);
+    S.lastAct = `${p.name} ${a.src === 'hand' ? 'speelt' : 'koopt'} ${c.name}${a.src === 'hand' ? ' uit de hand' : ''} voor ${cost} ₽${rep ? ` (vervangt ${C(rep).name})` : ''}.`;
+    addLog(S.lastAct); note(pi, `${a.src === 'hand' ? 'speelde' : 'kocht'} ${c.name} · ${cost} ₽`, inst.id);
+  } else if(a.t === 'take'){
+    const inst = rowArr(a.src).splice(a.i, 1)[0];
+    p.hand.push(inst);
+    S.lastAct = `${p.name} neemt ${C(inst).name} in de hand.`; addLog(S.lastAct); note(pi, `nam ${C(inst).name} in de hand`, inst.id);
+  } else if(a.t === 'obs'){
+    const inst = S.decks[a.deck].shift();
+    p.obsUsed = true;
+    S.pending = {t:'obs', pi, inst};
+    addLog(`${p.name} gebruikt de Sterrenwacht en trekt ${C(inst).name}.`);
+    if(p.bot) return resolveObs(botObs(pi, inst));
+    return;
+  }
+  advance();
+}
+
+function resolveObs(choice){
+  const {pi, inst} = S.pending, p = S.players[pi], c = C(inst);
+  S.pending = null;
+  if(choice.t === 'buy'){
+    const repInst = choice.rep ? p.cards.find(x => x.u === choice.rep) : null;
+    const cost = price(p, c, 'hand', repInst);
+    const rep = placeCard(p, inst, choice.rep, cost);
+    S.lastAct = `${p.name} koopt ${c.name} via de Sterrenwacht voor ${cost} ₽${rep ? ` (vervangt ${C(rep).name})` : ''}.`;
+  } else if(choice.t === 'hand'){
+    p.hand.push(inst); S.lastAct = `${p.name} neemt ${c.name} via de Sterrenwacht in de hand.`;
+  } else {
+    S.lastAct = `${p.name} legt ${c.name} weg.`;
+  }
+  addLog(S.lastAct); note(pi, choice.t === 'buy' ? `kocht ${c.name} (Sterrenwacht)` : choice.t === 'hand' ? `nam ${c.name} in de hand` : `Sterrenwacht: ${c.name} weggelegd`, inst.id);
+  advance();
+}
+
+function advance(){
+  const n = S.players.length;
+  if(S.passes >= n) return endPhase();
+  S.cur = (S.cur + 1) % n;
+}
+
+function phaseGain(p, type){
+  let r = 0, v = 0;
+  p.cards.forEach(x => { const c = C(x); if(c.type === type){ r += incomeOf(p, c); v += c.vp; } });
+  return {r, v};
+}
+function endPhase(){
+  const ph = S.phase;
+  if(ph < 3){
+    const type = PH[ph].key, parts = [];
+    S.players.forEach((p, i) => { const g = phaseGain(p, type); p.money += g.r; p.vp += g.v; parts.push({i, name:p.name, r:g.r, v:g.v}); });
+    S.lastScore = {phase:ph, parts, round:S.round}; S.scoreId++;
+    addLog(`Telling ${PH[ph].name}: ` + parts.map(x => `${x.name} ${fmtGain(x.r, x.v)}`).join(', ') + '.', 'score');
+  }
+  if(ph === 1){
+    S.pubQueue = S.players.map((p, i) => i).filter(i => pubMax(S.players[i]) > 0);
+    return nextPub();
+  }
+  finishPhase();
+}
+function fmtGain(r, v){ const a = []; if(r) a.push(`+${r} ₽`); if(v) a.push(`+${v} ★`); return a.length ? a.join(' ') : 'niets'; }
+const pubMax = p => Math.min(5 * p.cards.filter(x => C(x).sp === 'pub').length, Math.floor(p.money / 2));
+function nextPub(){
+  while(S.pubQueue && S.pubQueue.length){
+    const pi = S.pubQueue.shift(), p = S.players[pi], max = pubMax(p);
+    if(max <= 0) continue;
+    if(p.bot){ applyPub(pi, botPub(pi, max)); continue; }
+    S.pending = {t:'pub', pi, max};
+    return;
+  }
+  finishPhase();
+}
+function applyPub(pi, k){
+  const p = S.players[pi];
+  if(k > 0){ p.money -= 2 * k; p.vp += k; addLog(`${p.name} koopt in de Kroeg ${k} punt${k > 1 ? 'en' : ''} voor ${2 * k} ₽.`, 'score'); if(S.lastScore) S.lastScore.pub = (S.lastScore.pub || []).concat([{name:p.name, k}]); }
+}
+function finishPhase(){
+  if(S.phase < 3){ S.phase++; return startPhase(); }
+  if(S.lastRound) return endGame();
+  if(S.lower.length) addLog(`${S.lower.length} kaart${S.lower.length > 1 ? 'en' : ''} uit de onderste rij gaan weg; de bovenste rij schuift naar beneden.`);
+  S.lower = S.upper; S.upper = [];
+  S.markers = S.markers.map(m => (m + 1) % S.players.length);
+  S.round++; S.phase = 0;
+  startPhase();
+}
+function aristoKinds(cards){ return new Set(cards.filter(x => C(x).type === 'aristocrat').map(x => x.id)).size; }
+function endGame(){
+  S.over = true;
+  S.final = S.players.map((p, i) => {
+    const kinds = aristoKinds(p.cards), bonus = ARI[Math.min(10, kinds)];
+    const geld = Math.floor(p.money / 10), hand = -HAND_PENALTY * p.hand.length;
+    return {i, name:p.name, vp:p.vp, kinds, bonus, geld, hand, money:p.money, total:p.vp + bonus + geld + hand};
+  }).sort((a, b) => b.total - a.total || b.money - a.money);
+  addLog(`Einde van het spel. ${S.final[0].name} wint met ${S.final[0].total} punten!`, 'phase');
+}
+
+/* ================================================================
+   BOTS
+   ================================================================ */
+// waarde van 1 roebel in punten, met k rondes te gaan; per niveau instelbaar
+// afgesteld met toernooien tussen bots: vroeg in het spel is geld veel waard (investeren), aan het eind bijna niets
+const WPAR = {easy:{base:0.1, slope:0.07, cap:0.55}, medium:{base:0.1, slope:0.3, cap:2.5}, hard:{base:0.1, slope:0.4, cap:3}};
+let WP = WPAR.medium;
+const W = k => (k === 1 && WP.w1 != null) ? WP.w1 : Math.min(WP.cap, WP.base + WP.slope * Math.max(0, k));
+const isHard = lvl => lvl !== 'easy' && lvl !== 'medium';
+function estRounds(){
+  if(S.lastRound) return 1;
+  let m = 99;
+  PH.forEach((ph, pi) => {
+    const d = ph.deck;
+    const drawn = S.deckSize[d] - S.decks[d].length - (pi === 0 ? ROW : 0);
+    const done = S.round - 1 + (S.phase >= pi ? 1 : 0) - (pi === 0 ? 1 : 0);
+    const per = Math.max(2.5, (4.5 * 2 + Math.max(0, drawn)) / (2 + Math.max(0, done)));
+    m = Math.min(m, S.decks[d].length / per);
+  });
+  return Math.max(1, Math.min(10, 1 + Math.floor(m)));
+}
+function incomeVal(p, c, R){
+  const first = TYPE_PH[c.type] >= S.phase ? 0 : 1;
+  const r = c.per ? countType(p, c.per) + 0.5 : c.r;
+  let v = 0;
+  for(let i = first; i < R; i++) v += c.vp + r * W(R - 1 - i);
+  return v;
+}
+function value(p, inst, src, repU, R){
+  const c = C(inst), rep = repU ? p.cards.find(x => x.u === repU) : null;
+  const cost = price(p, c, src, rep);
+  let g = incomeVal(p, c, R);
+  if(rep) g -= incomeVal(p, C(rep), R);
+  if(c.type === 'aristocrat'){
+    const before = aristoKinds(p.cards), after = aristoKinds(p.cards.filter(x => x !== rep).concat([inst]));
+    g += ARI[Math.min(10, after)] - ARI[Math.min(10, before)];
+  }
+  if(c.disc){ for(let k = 0; k < R - 1; k++) g += 1.1 * W(R - 2 - k); }
+  // kaarten die op het aantal arbeiders/aristocraten letten maken die soort waardevoller
+  p.cards.forEach(x => { const o = C(x); if(o.per && o.per === c.type && !rep) g += W(R - 1) * Math.max(0, R - 1) * 0.8; });
+  const bLeft = S.phase <= 1 ? R : R - 1;
+  if(c.sp === 'pub') g += bLeft * (R <= 3 ? 1.6 : 0.7);
+  if(c.sp === 'obs') g += 0.6 * Math.max(0, bLeft - 1);
+  if(c.sp === 'warehouse') g += p.hand.length >= handLimit(p) ? 1.2 : 0.4;
+  if(c.sp === 'potemkin') g += R > 2 ? 1.5 : 0;
+  return {v: g - cost * W(R - 1), cost};
+}
+function bestAction(pi, lvl){
+  WP = WPAR[lvl] || WPAR.hard;
+  const p = S.players[pi], R = estRounds();
+  const noise = {easy:3, medium:0.9}[lvl] || 0;
+  let best = {a:{t:'pass'}, s: isHard(lvl) ? 0.2 : 0.4};
+  const acts = legalActions(pi);
+  if(lvl === 'easy' && Math.random() < 0.3){
+    const buys = acts.filter(a => a.t === 'buy');
+    if(buys.length) return {a:buys[Math.floor(Math.random() * buys.length)], s:1};
+  }
+  const income = p.cards.reduce((s, x) => s + incomeOf(p, C(x)), 0);
+  for(const a of acts){
+    let s;
+    if(a.t === 'buy'){
+      const inst = (a.src === 'hand' ? p.hand : rowArr(a.src))[a.i];
+      s = value(p, inst, a.src, a.rep, R).v;
+      if(a.src === 'hand') s += R <= 1 ? HAND_PENALTY : 1;
+    } else if(a.t === 'take'){
+      if(lvl === 'easy' || R <= 1) continue;
+      const inst = rowArr(a.src)[a.i];
+      if(buyOptions(p, inst, a.src).some(o => o.price <= p.money)) continue;
+      const opts = buyOptions(p, inst, 'hand'); if(!opts.length) continue;
+      const short = Math.min(...opts.map(o => o.price)) - p.money;
+      if(short > income + 4) continue;
+      const v = Math.max(...opts.map(o => value(p, inst, 'hand', o.rep, R).v));
+      if(v < (isHard(lvl) ? 2.5 : 3.5)) continue;
+      s = v * (isHard(lvl) ? 0.5 : 0.35) - (R <= 2 ? 2 : 0.5);
+    } else if(a.t === 'obs'){
+      if(lvl === 'easy' || p.money < 6) continue;
+      s = R >= 2 ? (a.deck === (R <= 3 ? 'building' : 'worker') ? 1.1 : 0.8) : 0.3;
+    } else continue;
+    s += (Math.random() * 2 - 1) * noise;
+    if(s > best.s) best = {a, s};
+  }
+  return best;
+}
+function botObs(pi, inst){
+  WP = WPAR[S.players[pi].bot] || WPAR.hard;
+  const p = S.players[pi], R = estRounds();
+  let best = {t:'discard', s:0};
+  for(const o of buyOptions(p, inst, 'hand')){
+    if(o.price > p.money) continue;
+    const s = value(p, inst, 'hand', o.rep, R).v;
+    if(s > best.s) best = {t:'buy', rep:o.rep, s};
+  }
+  if(best.t === 'discard' && p.hand.length < handLimit(p) && R > 2){
+    const opts = buyOptions(p, inst, 'hand');
+    if(opts.length && Math.max(...opts.map(o => value(p, inst, 'hand', o.rep, R).v)) > 3) best = {t:'hand'};
+  }
+  return best;
+}
+function botPub(pi, max){
+  const p = S.players[pi], lvl = p.bot, after = estRounds() - 1;
+  WP = WPAR[lvl] || WPAR.hard;
+  if(lvl === 'easy') return Math.floor(Math.random() * (max + 1));
+  if(lvl === 'medium') return after === 0 ? max : (p.money >= 16 ? Math.min(max, 2) : 0);
+  if(after === 0) return max;
+  if(W(after) >= 0.5) return 0;
+  const reserve = 6 + 3 * Math.min(after, 3);
+  return Math.max(0, Math.min(max, Math.floor((p.money - reserve) / 2)));
+}
+
+/* ================================================================
+   KAARTILLUSTRATIES (keizerlijke stijl, zelf getekend)
+   ================================================================ */
+function facade(x, w, y, h, win, rows){
+  let s = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="currentColor"/>`;
+  rows = rows || 1;
+  for(let r = 0; r < rows; r++) for(let i = 0; i < win; i++){
+    const wx = x + (i + 0.5) * w / win - 2.2;
+    s += `<rect x="${wx.toFixed(1)}" y="${y + 4 + r * 10}" width="4.4" height="7" rx="2.2" class="d"/>`;
+  }
+  return s;
+}
+function onion(cx, by, k){
+  k = k || 1;
+  const t = by - 6 * k, top = by - 22 * k;
+  return `<rect x="${cx - 3 * k}" y="${t}" width="${6 * k}" height="${6 * k}" fill="currentColor"/>`+
+    `<path d="M${cx} ${top} C${cx - 10 * k} ${top + 8 * k} ${cx - 9 * k} ${t - 1} ${cx} ${t} C${cx + 9 * k} ${t - 1} ${cx + 10 * k} ${top + 8 * k} ${cx} ${top}Z" class="g"/>`+
+    `<path d="M${cx} ${top} v${-5 * k} M${cx - 2 * k} ${top - 3 * k} h${4 * k}" class="sg"/>`;
+}
+function dome(cx, by, r){ return `<path d="M${cx - r} ${by} A${r} ${r} 0 0 1 ${cx + r} ${by}Z" class="g"/><path d="M${cx} ${by - r} v-5" class="sg"/>`; }
+function ped(x, w, y, h){ return `<path d="M${x} ${y} L${x + w / 2} ${y - h} L${x + w} ${y}Z" class="g"/>`; }
+function cols(x, w, y, h, n, cut){ let s = ''; for(let i = 0; i < n; i++) s += `<rect x="${(x + i * w / (n - 1) - 1.4).toFixed(1)}" y="${y}" width="2.8" height="${h}" ${cut ? 'class="d"' : 'fill="currentColor"'}/>`; return s; }
+const GROUND = `<path d="M6 60 H94" class="sg"/>`;
+function bust(o){
+  let s = `<ellipse cx="50" cy="33" rx="27" ry="28" class="sg"/>`;
+  s += o.f
+    ? `<path d="M28 60 C28 47 38 43 50 43 C62 43 72 47 72 60Z" fill="currentColor"/><path d="M40 45 Q50 52 60 45" class="sd"/><circle cx="50" cy="31" r="8.5" fill="currentColor"/><circle cx="50" cy="20" r="5" fill="currentColor"/>`
+    : `<path d="M30 60 C30 47 39 43 50 43 C61 43 70 47 70 60Z" fill="currentColor"/><path d="M46 44 L50 50 L54 44" class="sd"/><circle cx="50" cy="31" r="8.5" fill="currentColor"/>`;
+  if(o.beard) s += `<path d="M43 33 Q50 50 57 33" fill="currentColor"/><path d="M45 38 Q50 47 55 38" class="sd"/>`;
+  const hats = {
+    wig: `<circle cx="41.5" cy="32" r="3.6" fill="currentColor"/><circle cx="58.5" cy="32" r="3.6" fill="currentColor"/>`,
+    tricorn: `<path d="M37 25 L50 16 L63 25 L56 23 L50 25 L44 23Z" class="g"/>`,
+    bicorne: `<path d="M33 26 Q50 7 67 26 Q50 20 33 26Z" class="g"/>`,
+    klobuk: `<path d="M38 30 Q38 10 50 10 Q62 10 62 30 L60 25 Q50 22 40 25Z" fill="currentColor"/><path d="M38 30 Q38 10 50 10 Q62 10 62 30" class="sg"/><path d="M50 4 v6 M47.5 6.5 h5" class="sg"/>`,
+    kamilavka: `<rect x="41" y="14" width="18" height="10" rx="1" class="g"/>`,
+    helmet: `<path d="M40 26 Q40 14 50 14 Q60 14 60 26Z" class="g"/><path d="M50 14 V7" class="sg"/>`,
+    cap: `<path d="M40 24 Q50 14 60 24Z" class="g"/><path d="M38 24 h24" class="sg"/>`,
+    bonnet: `<path d="M39 30 Q37 16 50 15 Q63 16 61 30" class="sg"/><path d="M42 21 Q50 14 58 21" class="sg"/>`,
+    crown: `<path d="M41 24 L41 14 L45.5 18 L50 10 L54.5 18 L59 14 L59 24Z" class="g"/>`,
+    imperial: `<path d="M40 24 Q40 9 50 9 Q60 9 60 24Z" class="g"/><path d="M50 9 v-5 M47.5 6 h5" class="sg"/><path d="M50 10 v14" class="sd"/>`,
+    laurel: `<path d="M41 33 Q38 22 46 18 M59 33 Q62 22 54 18" class="sg"/><path d="M40 27 l-3 -1 M41 22 l-3 -2 M60 27 l3 -1 M59 22 l3 -2" class="sg"/>`,
+    none: ''
+  };
+  s += hats[o.hat || 'none'];
+  const em = {
+    quill: `<path d="M84 58 Q78 40 88 30 Q86 44 84 58Z" class="g"/>`,
+    scroll: `<rect x="74" y="44" width="16" height="12" rx="2" class="g"/><path d="M77 48 h10 M77 52 h7" class="sd"/>`,
+    key: `<circle cx="80" cy="44" r="4.5" class="sg"/><path d="M80 48.5 V60 M80 56 h4 M80 59 h3" class="sg"/>`,
+    pen: `<rect x="73" y="46" width="16" height="12" class="g"/><path d="M86 30 L80 50" class="s"/>`,
+    monocle: `<circle cx="55" cy="31" r="3.4" class="sd"/><path d="M58 34 Q62 42 60 50" class="sd"/>`,
+    scales: `<path d="M81 34 V58 M73 38 H89" class="sg"/><path d="M70 46 Q73 51 76 46Z M86 46 Q89 51 92 46Z" class="g"/>`,
+    fan: `<path d="M80 58 L70 42 A16 16 0 0 1 90 42Z" class="g"/><path d="M80 58 L76 43 M80 58 L80 41 M80 58 L84 43" class="sd"/>`,
+    star: `<path d="M41 49 l1.6 3.4 3.7 .4 -2.8 2.5 .8 3.7 -3.3 -1.9 -3.3 1.9 .8 -3.7 -2.8 -2.5 3.7 -.4Z" class="g"/>`,
+    sash: `<path d="M36 47 L64 60" stroke="var(--gold-hi)" stroke-width="4"/>`,
+    anchor: `<path d="M81 36 V58 M75 41 H87 M73 52 Q81 62 89 52" class="sg"/>`,
+    orb: `<circle cx="81" cy="52" r="6" class="g"/><path d="M81 46 v-5 M78.5 43 h5" class="sg"/>`,
+    cross: `<path d="M81 36 V58 M75 42 H87 M76 52 L86 49" class="sg"/>`,
+    sword: `<path d="M86 30 L76 58" class="sg"/><path d="M76 50 L86 53" class="sg"/>`,
+    compass: `<path d="M81 34 L74 58 M81 34 L88 58 M76 50 Q81 54 86 50" class="sg"/><circle cx="81" cy="34" r="2" class="g"/>`,
+    purse: `<path d="M74 46 Q72 60 81 60 Q90 60 88 46Z" class="g"/><path d="M74 46 h14 M78 44 l3 -4 3 4" class="sg"/>`,
+    tray: `<path d="M72 50 H90" class="sg"/><path d="M75 50 Q81 40 87 50Z" class="g"/>`
+  };
+  (o.em || []).forEach(e => s += em[e]);
+  return s;
+}
+const ART = {
+  axe: `<rect x="12" y="46" width="76" height="11" rx="5.5" fill="currentColor"/><circle cx="17.5" cy="51.5" r="4" class="g"/><circle cx="82.5" cy="51.5" r="4" class="g"/><path d="M38 44 L62 8" class="s"/><path d="M56 6 Q74 6 76 22 L64 24 Q62 14 54 12Z" class="g"/>`,
+  pick: `<path d="M34 58 L62 14" class="s"/><path d="M40 10 Q62 0 84 20 Q64 12 48 18Z" class="g"/><path d="M16 58 l5 -8 6 3 -3 5Z M66 58 l4 -6 5 2 -1 4Z M24 52 l3 -4 3 2 -1 3Z" class="g"/>`,
+  sheep: `<circle cx="38" cy="34" r="9" fill="currentColor"/><circle cx="50" cy="30" r="10" fill="currentColor"/><circle cx="62" cy="34" r="9" fill="currentColor"/><circle cx="44" cy="40" r="9" fill="currentColor"/><circle cx="57" cy="40" r="9" fill="currentColor"/><ellipse cx="74" cy="32" rx="6.5" ry="5" class="g"/><path d="M40 47 v10 M48 48 v10 M56 48 v10 M64 46 v10" class="s"/>${GROUND}`,
+  ushanka: `<path d="M24 38 Q24 10 50 10 Q76 10 76 38Z" fill="currentColor"/><path d="M22 36 h56 v8 H22Z" class="g"/><path d="M24 44 v12 q4 4 8 0 V44 M68 44 v12 q4 4 8 0 V44" fill="currentColor"/><path d="M36 22 q4 -4 8 0 M50 18 q4 -4 8 0 M58 26 q4 -4 8 0" class="sd"/>`,
+  ship: `<path d="M16 46 H84 L76 56 H24Z" class="g"/><path d="M50 46 V8" class="s"/><path d="M50 10 L72 40 H50Z M48 14 L30 40 H48Z" fill="currentColor"/><path d="M8 60 q6 -4 12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0" class="sg"/>`,
+  crown: `<path d="M28 40 L28 18 L38 28 L50 10 L62 28 L72 18 L72 40Z" class="g"/><rect x="28" y="40" width="44" height="6" class="g"/><circle cx="50" cy="32" r="3" class="d"/><path d="M30 58 L58 50" class="s"/><rect x="54" y="45" width="14" height="8" rx="1.5" fill="currentColor" transform="rotate(-16 61 49)"/>`,
+  saw: `<rect x="10" y="42" width="56" height="10" fill="currentColor"/><path d="M48 8 L88 30 L84 36 L44 14Z" class="g"/><path d="M48 14 l3 2 M54 17 l3 2 M60 20 l3 2 M66 24 l3 2 M72 27 l3 2" class="sd"/><path d="M84 34 L92 46" class="s"/>${GROUND}`,
+  furnace: `<path d="M30 60 V26 Q50 8 70 26 V60Z" fill="currentColor"/><path d="M40 60 V42 Q50 32 60 42 V60Z" class="g"/><path d="M44 52 Q50 40 56 52Z" class="d"/><rect x="62" y="8" width="8" height="18" fill="currentColor"/><path d="M14 46 h12 l-2 8 h-8Z" class="g"/>${GROUND}`,
+  spool: `<rect x="34" y="8" width="32" height="6" rx="2" class="g"/><rect x="34" y="50" width="32" height="6" rx="2" class="g"/><rect x="38" y="14" width="24" height="36" fill="currentColor"/><path d="M38 20 h24 M38 26 h24 M38 32 h24 M38 38 h24 M38 44 h24" class="sd"/><path d="M62 30 Q80 34 76 58" class="sg"/>`,
+  coat: `<path d="M38 8 L62 8 L74 18 L80 58 H20 L26 18Z" fill="currentColor"/><path d="M38 8 Q50 20 62 8 L60 58 H40Z" class="g"/><path d="M50 22 V56" class="sd"/>`,
+  slipway: `<path d="M14 40 H86 L76 52 H24Z" class="g"/><path d="M24 40 V22 M38 40 V16 M52 40 V16 M66 40 V22" class="s"/><path d="M20 22 H70" class="s"/><path d="M20 52 L28 60 M40 52 V60 M60 52 V60 M80 52 L72 60" class="sg"/>${GROUND}`,
+  b_markt: `<rect x="14" y="36" width="32" height="22" fill="currentColor"/><rect x="54" y="36" width="32" height="22" fill="currentColor"/><path d="M10 36 l6 -12 h28 l6 12Z M50 36 l6 -12 h28 l6 12Z" class="g"/><path d="M22 24 l-2 12 M30 24 v12 M38 24 l2 12 M62 24 l-2 12 M70 24 v12 M78 24 l2 12" class="sd"/><rect x="22" y="44" width="16" height="14" class="d"/><rect x="62" y="44" width="16" height="14" class="d"/><circle cx="30" cy="48" r="3" class="g"/><circle cx="70" cy="48" r="3" class="g"/>${GROUND}`,
+  b_douane: `${facade(22,56,32,28,4,2)}${ped(18,64,32,10)}<path d="M50 22 V6" class="sg"/><path d="M50 6 h14 l-3 4 3 4 H50Z" class="g"/>${GROUND}`,
+  b_brand: `${facade(26,48,34,26,4,2)}<rect x="43" y="10" width="14" height="24" fill="currentColor"/><rect x="40" y="16" width="20" height="3" class="g"/><rect x="47" y="22" width="6" height="8" rx="3" class="d"/>${dome(50,10,7)}${GROUND}`,
+  b_zieken: `${facade(14,72,32,28,6,2)}${ped(12,76,32,12)}<path d="M50 22 v-8 M46 18 h8" stroke="var(--c)" stroke-width="2.6"/>${GROUND}`,
+  b_biblio: `<rect x="16" y="28" width="68" height="32" fill="currentColor"/>${cols(24,52,32,24,6,true)}<rect x="16" y="28" width="68" height="4" class="g"/>${ped(14,72,28,12)}<rect x="44" y="18" width="12" height="7" class="d"/>${GROUND}`,
+  b_theater: `<rect x="12" y="30" width="76" height="30" fill="currentColor"/>${cols(20,60,34,22,7,true)}<rect x="12" y="30" width="76" height="4" class="g"/>${ped(26,48,30,12)}<path d="M30 12 l8 8 h24 l8 -8" class="sg"/><circle cx="50" cy="24" r="2.5" class="d"/>${GROUND}`,
+  b_academie: `${facade(10,80,34,26,8,2)}<rect x="36" y="24" width="28" height="10" fill="currentColor"/>${dome(50,24,14)}${ped(36,28,34,6)}${GROUND}`,
+  b_potjomkin: `<path d="M34 60 L58 28 M44 60 L62 30 M66 60 L66 28" class="sg"/>${facade(18,46,28,32,3,2)}${ped(16,50,28,10)}<rect x="62" y="28" width="2" height="32" class="d"/>${GROUND}`,
+  b_pakhuis: `<rect x="22" y="30" width="56" height="30" fill="currentColor"/><path d="M18 32 L50 12 L82 32Z" class="g"/><rect x="36" y="38" width="28" height="22" class="d"/><path d="M36 38 L64 60 M64 38 L36 60" class="sg"/>${GROUND}`,
+  b_kroeg: `<rect x="18" y="30" width="44" height="30" fill="currentColor"/><path d="M14 32 L40 14 L66 32Z" class="g"/><rect x="34" y="42" width="12" height="18" rx="6" class="d"/><rect x="22" y="38" width="8" height="8" class="d"/><path d="M62 24 H84 M78 24 v6" class="sg"/><rect x="72" y="30" width="12" height="14" rx="2" class="g"/><path d="M84 33 q5 0 5 4 t-5 4" class="sg"/>${GROUND}`,
+  b_sterren: `${facade(24,52,36,24,4)}<rect x="34" y="26" width="32" height="10" fill="currentColor"/>${dome(50,26,16)}<path d="M50 24 L74 6" stroke="var(--c)" stroke-width="4"/><path d="M50 24 L72 8" class="s"/><path d="M18 12 l1.5 3 3 .3 -2.3 2 .7 3 -2.9 -1.6 -2.9 1.6 .7 -3 -2.3 -2 3 -.3Z M84 20 l1 2 2 .2 -1.5 1.3 .5 2 -2 -1 -2 1 .5 -2 -1.5 -1.3 2 -.2Z" class="g"/>${GROUND}`,
+  b_mariinski: `<rect x="10" y="26" width="80" height="34" fill="currentColor"/><path d="M14 60 V44 Q20 36 26 44 V60Z M32 60 V44 Q38 36 44 44 V60Z M56 60 V44 Q62 36 68 44 V60Z M74 60 V44 Q80 36 86 44 V60Z" class="d"/><rect x="10" y="26" width="80" height="4" class="g"/>${dome(50,26,10)}${GROUND}`,
+  b_bank: `<rect x="16" y="30" width="68" height="30" fill="currentColor"/>${cols(22,56,34,22,5,true)}${ped(12,76,30,12)}<circle cx="50" cy="22" r="4" class="d"/><circle cx="82" cy="12" r="7" class="g"/><path d="M82 8 v8" class="sd"/>${GROUND}`,
+  b_peterhof: `${facade(6,88,36,22,10)}<rect x="40" y="26" width="20" height="10" fill="currentColor"/>${dome(50,26,8)}<path d="M50 58 V46 M50 46 q-8 -8 -14 2 M50 46 q8 -8 14 2 M50 50 q-14 -2 -18 8 M50 50 q14 -2 18 8" class="sg"/>${GROUND}`,
+  b_isaak: `${facade(18,64,38,22,5)}${cols(22,56,38,22,6,true)}<rect x="36" y="22" width="28" height="16" fill="currentColor"/>${cols(38,24,24,12,5,true)}${dome(50,22,15)}${dome(22,38,5)}${dome(78,38,5)}${GROUND}`,
+  b_haven: `<rect x="16" y="14" width="6" height="44" fill="currentColor"/><path d="M12 24 h14 M12 34 h14 M12 44 h14" class="sg"/><circle cx="19" cy="10" r="4" class="g"/><path d="M40 46 H90 L82 56 H46Z" class="g"/><path d="M64 46 V10" class="s"/><path d="M64 12 L84 40 H64Z M62 16 L46 40 H62Z" fill="currentColor"/>${GROUND}`,
+  b_opstanding: `${facade(22,56,40,20,4)}<rect x="44" y="24" width="12" height="16" fill="currentColor"/>${onion(50,24,0.9)}${onion(30,40,0.6)}${onion(70,40,0.6)}${onion(40,40,0.5)}${onion(60,40,0.5)}${GROUND}`,
+  b_catharina: `${facade(6,88,30,30,11,2)}<rect x="6" y="30" width="88" height="3" class="g"/>${onion(84,30,0.6)}${onion(76,30,0.45)}${onion(92,30,0.45)}<path d="M40 30 L50 22 L60 30Z" class="g"/>${GROUND}`,
+  b_smolny: `${facade(18,64,40,20,5)}<rect x="40" y="26" width="20" height="14" fill="currentColor"/>${onion(50,26,1.1)}${onion(26,40,0.65)}${onion(74,40,0.65)}${onion(38,40,0.55)}${onion(62,40,0.55)}${GROUND}`,
+  b_hermitage: `${facade(8,84,32,28,9,2)}<rect x="8" y="32" width="84" height="3" class="g"/>${onion(20,32,0.5)}${onion(50,32,0.8)}${onion(80,32,0.5)}<rect x="44" y="46" width="12" height="14" rx="6" class="g"/>${GROUND}`,
+  b_winter: `${facade(4,92,30,30,12,2)}<rect x="4" y="30" width="92" height="3" class="g"/><path d="M8 30 v-5 M16 30 v-5 M24 30 v-5 M32 30 v-5 M40 30 v-5 M48 30 v-5 M56 30 v-5 M64 30 v-5 M72 30 v-5 M80 30 v-5 M88 30 v-5" class="sg"/>${ped(38,24,30,8)}${GROUND}`,
+  p_schrijver:   bust({hat:'none', em:['quill']}),
+  p_bestuurder:  bust({hat:'tricorn', em:['scroll']}),
+  p_rentmeester: bust({hat:'cap', em:['key']}),
+  p_secretaris:  bust({hat:'none', em:['pen']}),
+  p_controleur:  bust({hat:'tricorn', beard:true, em:['monocle','scroll']}),
+  p_rechter:     bust({hat:'wig', em:['scales']}),
+  p_hofdame:     bust({f:true, hat:'bonnet', em:['fan']}),
+  p_priester:    bust({hat:'kamilavka', beard:true, em:['cross']}),
+  p_wapenmeester:bust({hat:'helmet', beard:true, em:['sword']}),
+  p_kamenierster:bust({f:true, hat:'none', em:['tray']}),
+  p_bouwmeester: bust({hat:'cap', em:['compass']}),
+  p_senator:     bust({hat:'laurel', em:['scroll','sash']}),
+  p_patriarch:   bust({hat:'klobuk', beard:true, em:['orb']}),
+  p_tollenaar:   bust({hat:'cap', em:['purse']}),
+  p_admiraal:    bust({hat:'bicorne', beard:true, em:['anchor','star']}),
+  p_minister:    bust({hat:'wig', em:['sash','star']}),
+  p_tsaar:       bust({f:true, hat:'imperial', em:['orb','sash']})
+};
+const BACK_ICON = {
+  worker: `<svg viewBox="0 0 40 32" aria-hidden="true"><path d="M8 28 L24 8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M20 4 q10 0 12 10 l-6 2 q-1-6-6-6z" fill="#d9b55c"/></svg>`,
+  building: `<svg viewBox="0 0 40 32" aria-hidden="true"><path d="M20 2 C14 8 14 12 20 14 C26 12 26 8 20 2Z" fill="#d9b55c"/><rect x="16" y="14" width="8" height="6" fill="currentColor"/><rect x="6" y="20" width="28" height="10" fill="currentColor"/></svg>`,
+  aristocrat: `<svg viewBox="0 0 40 32" aria-hidden="true"><circle cx="20" cy="11" r="6" fill="currentColor"/><path d="M8 31 C8 22 13 19 20 19 C27 19 32 22 32 31Z" fill="currentColor"/><path d="M14 6 L14 1 L17 3.5 L20 0 L23 3.5 L26 1 L26 6Z" fill="#d9b55c"/></svg>`,
+  trade: `<svg viewBox="0 0 40 32" aria-hidden="true"><path d="M6 12 H30 l-5 -5 M34 20 H10 l5 5" fill="none" stroke="#d9b55c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+};
+
+/* ================================================================
+   WEERGAVE
+   ================================================================ */
+const app = document.getElementById('app');
+const modalEl = document.getElementById('modal');
+const bannerEl = document.getElementById('banner');
+const toastEl = document.getElementById('toast');
+let ui = {view:'start', modal:null, tipU:null, confirmNew:false, shownBanner:0, shownScore:0, shownAnnounce:0, shownMove:0, queue:[], hideFinal:false};
+let queueTimer = null;
+function syncShown(){ ui.shownBanner = S.bannerId; ui.shownScore = S.scoreId; ui.shownAnnounce = S.announceId || 0; ui.shownMove = S.moveId || 0; ui.queue = []; }
+let botTimer = null, bannerTimer = null, toastTimer = null;
+
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+function pawnSVG(i, size){
+  size = size || 16; const col = PAWN[i % PAWN.length];
+  return `<svg class="pawn" width="${size}" height="${Math.round(size * 1.25)}" viewBox="0 0 16 20" aria-hidden="true"><circle cx="8" cy="5" r="4" fill="${col}" stroke="#1a2922" stroke-width="1"/><path d="M3 19 Q3 11 8 10 Q13 11 13 19Z" fill="${col}" stroke="#1a2922" stroke-width="1"/></svg>`;
+}
+function yieldTxt(c){
+  const a = [];
+  if(c.per) a.push(`1₽/<span class="sq" style="background:var(--${c.per})"></span>`);
+  else if(c.r) a.push(`+${c.r} ₽`);
+  if(c.vp) a.push(`+${c.vp} ★`);
+  if(c.disc) a.push(`<span class="dsc" style="background:var(--${c.disc})">−1</span>`);
+  return a.join('<br>');
+}
+function cardHTML(inst, o){
+  o = o || {};
+  const c = C(inst);
+  let costTxt = c.cost, cls = '';
+  if(o.price != null){ costTxt = o.price; if(o.price < c.cost) cls = 'disc'; }
+  if(o.na) cls = 'na';
+  const attrs = o.act ? `data-act="${o.act}" data-src="${o.src || ''}" data-i="${o.i == null ? '' : o.i}" data-id="${c.id}"` : 'tabindex="-1"';
+  const lbl = `${c.name}, ${c.trade ? 'ruilkaart ' : ''}${TYPE_PL[c.type]}${o.mini ? '' : `, kost ${costTxt} roebel`}`;
+  return `<button class="card t-${c.type}${c.trade ? ' trade' : ''}${o.mini ? ' mini' : ''}${o.dim ? ' dim' : ''}${ui.tipU === inst.u ? ' tip' : ''}" ${attrs} aria-label="${esc(lbl)}">
+    <span class="in"><span class="cost ${cls} num">${costTxt}</span><span class="yield">${yieldTxt(c)}</span>
+    <svg class="art" viewBox="0 0 100 64" aria-hidden="true">${ART[c.art] || ''}</svg>
+    <span class="nm" lang="nl">${esc(c.name)}</span><span class="ty">${c.trade ? 'Ruilkaart' : TYPE_NL[c.type]}</span></span></button>`;
+}
+function notesFor(amount){
+  const out = []; let left = amount;
+  for(const v of [20,10,5,2,1]){ while(left >= v){ out.push(v); left -= v; } }
+  return out;
+}
+function moneyHTML(amount, big){
+  const nw = big ? 64 : 50, nh = big ? 36 : 28, step = big ? 27 : 21;
+  let notes = notesFor(amount);
+  const extra = notes.length > 7 ? notes.length - 7 : 0;
+  if(extra) notes = notes.slice(0, 7);
+  const w = notes.length ? nw + (notes.length - 1) * step : nw;
+  const bills = notes.length ? notes.map((v, i) => `<span class="bill v${v}" style="left:${i * step}px;transform:rotate(${((i % 3) - 1) * 3}deg)"><b>${v}</b></span>`).join('')
+    : `<span class="bill v1" style="left:0;opacity:.3"><b>0</b></span>`;
+  return `<div class="purse" aria-label="${amount} roebel"><div class="notes" style="--nw:${nw}px;--nh:${nh}px;width:${w}px">${bills}</div><div class="total num">${amount} ₽<small>${extra ? `+ nog ${extra} biljetten` : 'roebels'}</small></div></div>`;
+}
+function shownPrice(inst, src){
+  const p = S.players[0], opts = buyOptions(p, inst, src);
+  if(!opts.length) return {price:C(inst).cost, na:true, ok:false};
+  const pr = Math.min(...opts.map(o => o.price));
+  return {price:pr, na:false, ok:pr <= p.money};
+}
+const isMyTurn = () => S && !S.over && !S.pending && S.cur === 0;
+
+function skylineSVG(cls){
+  const pieces = [
+    `<g transform="translate(0,26)">${ART.b_winter}</g>`,
+    `<g transform="translate(92,10)">${ART.b_smolny}</g>`,
+    `<g transform="translate(184,20)">${ART.b_isaak}</g>`,
+    `<g transform="translate(276,14)">${ART.b_opstanding}</g>`,
+    `<g transform="translate(368,24)">${ART.b_hermitage}</g>`];
+  return `<svg class="${cls}" viewBox="0 0 470 92" aria-hidden="true" style="--c:var(--facade)">${pieces.join('')}<path d="M0 87 H470" class="sg"/></svg>`;
+}
+
+function renderStart(){
+  let saved = null; try{ saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }catch(e){}
+  const canResume = (S && !S.over) || (saved && saved.S && !saved.S.over);
+  const resumeRound = S && !S.over ? S.round : saved && saved.S ? saved.S.round : 0;
+  const lvlDesc = {easy:'Bots kopen vaak zomaar iets en maken fouten.', medium:'Bots spelen verstandig, met af en toe een misser.', hard:'Bots rekenen goed en wisselen op tijd van geld naar punten.'};
+  const sample = [{u:'s1', id:'houthakker'}, {u:'s2', id:'winterpaleis'}, {u:'s3', id:'hofdame'}];
+  app.innerHTML = `<div class="start">
+    ${skylineSVG('skyline')}
+    <div class="start-hero"><h1>Sint-Petersburg</h1><p>Bouw je stad met arbeiders, paleizen en hofadel. Wie aan het eind de meeste punten heeft, wint.</p></div>
+    <div class="start-grid">
+      <div><div class="fan">${sample.map(x => cardHTML(x)).join('')}</div>
+        <p class="hint" style="text-align:center">Eerste editie (2004) · 2 tot 4 spelers · tegen de computer</p></div>
+      <div class="panel form">
+        <div><label for="f-name">Jouw naam</label><input type="text" id="f-name" maxlength="16" value="${esc(settings.name)}" autocomplete="off"></div>
+        <div><span class="lbl">Aantal tegenstanders</span><div class="seg" role="group" aria-label="Aantal tegenstanders">
+          ${[1,2,3].map(n => `<button data-act="set" data-k="bots" data-v="${n}" aria-pressed="${settings.bots === n}">${n}</button>`).join('')}</div></div>
+        <div><span class="lbl">Niveau</span><div class="seg" role="group" aria-label="Niveau">
+          ${['easy','medium','hard'].map(l => `<button data-act="set" data-k="level" data-v="${l}" aria-pressed="${settings.level === l}">${LEVEL_NL[l]}</button>`).join('')}</div>
+          <p class="hint">${lvlDesc[settings.level]}</p></div>
+        <div><span class="lbl">Tempo van de bots</span><div class="seg" role="group" aria-label="Tempo">
+          ${[['slow','Rustig'],['normal','Normaal'],['fast','Snel']].map(([k, t]) => `<button data-act="set" data-k="speed" data-v="${k}" aria-pressed="${settings.speed === k}">${t}</button>`).join('')}</div></div>
+        <label class="check"><input type="checkbox" id="f-big" ${settings.big ? 'checked' : ''}> Grote tekst en kaarten</label>
+        <div class="start-actions">
+          <button class="btn primary" data-act="new">Nieuw spel</button>
+          ${canResume ? `<button class="btn" data-act="resume">Verder spelen (ronde ${resumeRound})</button>` : ''}
+          <button class="btn" data-act="rules">Spelregels</button>
+        </div>
+        ${ui.confirmNew ? `<div class="note"><p style="margin:0 0 8px">Er loopt nog een spel. Wil je dat stoppen en opnieuw beginnen?</p><div class="btns"><button class="btn primary small" data-act="new-yes">Ja, nieuw spel</button><button class="btn small" data-act="new-no">Nee</button></div></div>` : ''}
+      </div>
+    </div></div>`;
+}
+
+function tableauHTML(p){
+  const groups = {worker:{}, building:{}, aristocrat:{}};
+  p.cards.forEach(x => { const c = C(x); (groups[c.type][x.id] = groups[c.type][x.id] || []).push(x); });
+  return `<div class="tableau">${['worker','building','aristocrat'].map(type => {
+    const ids = Object.keys(groups[type]).sort((a, b) => CAT[a].cost - CAT[b].cost);
+    const g = phaseGain(p, type);
+    const extra = type === 'aristocrat' && ids.length ? ` · ${aristoKinds(p.cards)} soorten` : '';
+    return `<div class="tgroup ${type}"><h4>${DECK_NL[type]}<span>${g.r || g.v ? fmtGain(g.r, g.v) + ' per ronde' : ''}${extra}</span></h4>
+      ${ids.length ? `<div class="minis">${ids.map(id => { const list = groups[type][id], isNew = S.flash && list.some(x => x.u === S.flash.u);
+        return `<div class="mini-wrap${isNew ? ' new' : ''}">${cardHTML(list[0], {mini:true, act:'view'})}${list.length > 1 ? `<i>×${list.length}</i>` : ''}</div>`; }).join('')}</div>` : `<span class="none">Nog geen ${DECK_NL[type].toLowerCase()}.</span>`}
+    </div>`; }).join('')}</div>`;
+}
+function markersOf(pi){ return S.markers.map((m, i) => m === pi ? PH[i].name : null).filter(Boolean); }
+
+function trackHTML(){
+  const segs = Array.from({length:20}, () => '<span></span>').join('');
+  const labels = [0,20,40,60,80,100].map(v => `<em style="left:${v}%">${v}</em>`).join('');
+  const seen = {};
+  const pawns = S.players.map((p, i) => {
+    const pos = p.vp % 100;
+    const lift = (seen[pos] = (seen[pos] || 0) + 1) - 1;
+    return `<span class="track-pawn" style="left:${pos}%;margin-bottom:${lift * 9}px" title="${esc(p.name)}: ${p.vp} punten">${p.vp >= 100 ? '<sup>+100</sup>' : ''}${pawnSVG(i, 14)}</span>`;
+  }).join('');
+  return `<div class="track" role="img" aria-label="Scorebaan: ${esc(S.players.map(p => `${p.name} ${p.vp} punten`).join(', '))}"><div class="track-bar">${segs}${labels}${pawns}</div></div>`;
+}
+function bonusHTML(){
+  const kinds = aristoKinds(S.players[0].cards), k = Math.min(10, kinds);
+  return `<div class="bonus"><div class="bonus-wrap"><table aria-label="Eindbonus voor verschillende aristocraten"><tr>${ARI.slice(1).map((_, i) => `<td class="${k === i + 1 ? 'me' : ''}">${i + 1}${i === 9 ? '+' : ''}</td>`).join('')}</tr><tr>${ARI.slice(1).map((v, i) => `<td class="${k === i + 1 ? 'me' : ''}">${v}</td>`).join('')}</tr></table></div>
+    <p>Eindbonus voor verschillende soorten aristocraten. Jij hebt er nu ${kinds}.</p></div>`;
+}
+
+function renderGame(){
+  const me = S.players[0], mine = isMyTurn(), cur = S.players[S.cur];
+  const slotRow = src => {
+    const arr = rowArr(src); let h = '';
+    for(let i = 0; i < ROW; i++){
+      const inst = arr[i];
+      if(!inst){ h += `<div class="slot" aria-hidden="true"></div>`; continue; }
+      const sp = shownPrice(inst, src);
+      h += cardHTML(inst, {act:'card', src, i, price:sp.price, na:sp.na, dim:mine && !sp.ok && me.hand.length >= handLimit(me)});
+    }
+    return h;
+  };
+  let handSlots = '';
+  for(let i = 0; i < handLimit(me); i++){
+    const inst = me.hand[i];
+    if(!inst){ handSlots += `<div class="slot" aria-hidden="true"></div>`; continue; }
+    const sp = shownPrice(inst, 'hand');
+    handSlots += cardHTML(inst, {act:'card', src:'hand', i, price:sp.price, na:sp.na, dim:mine && !sp.ok});
+  }
+  const rivals = S.players.map((p, i) => {
+    if(i === 0) return '';
+    const turn = S.cur === i && !S.over && !S.pending;
+    return `<button class="rival${turn ? ' turn' : ''}" data-act="rival" data-pi="${i}" aria-label="${esc(p.name)}: ${p.money} roebel, ${p.vp} punten. Bekijk kaarten">
+      <div class="rival-h">${pawnSVG(i, 16)}<b>${esc(p.name)}</b><small>${LEVEL_NL[p.bot]}</small>${turn ? '<span class="thinking">denkt na…</span>' : ''}</div>
+      ${p.lastMove ? `<span class="lastmove${p.lastMove === 'past' ? ' pass' : ''}">${esc(p.lastMove)}</span>` : ''}
+      <div class="rival-s"><span class="minibill num"><i></i>${p.money} ₽</span><span class="num"><b>${p.vp}</b> ★</span><span class="num">hand ${p.hand.length}</span>
+        <span class="counts"><span style="background:var(--worker)">${countType(p, 'worker')}</span><span style="background:var(--building)">${countType(p, 'building')}</span><span style="background:var(--aristocrat)">${countType(p, 'aristocrat')}</span></span></div>
+    </button>`;
+  }).join('');
+  const decks = PH.map((ph, i) => {
+    const isCur = i === S.phase && !S.over, st = S.markers[i];
+    return `<div class="deck d-${ph.deck}${isCur ? ' cur' : ''}"><div class="back ${ph.deck}">${BACK_ICON[ph.deck]}<span class="cnt num">${S.decks[ph.deck].length}</span></div>
+      <b>${ph.name}</b>${isCur ? '<span class="now">nu</span>' : ''}<span class="starter">${pawnSVG(st, 11)}${esc(S.players[st].name)}</span></div>`;
+  }).join('');
+  let now, sub = S.lastAct || '';
+  if(S.over) now = 'Het spel is afgelopen.';
+  else if(S.pending && S.pending.t === 'pub') now = 'Kroeg: kies hoeveel punten je koopt.';
+  else if(S.pending && S.pending.t === 'obs') now = 'Sterrenwacht: kies wat je met de kaart doet.';
+  else if(mine) now = 'Jouw beurt: tik op een kaart, of pas.';
+  else now = `${cur.name} is aan de beurt…`;
+  if(mine && S.passes) sub = `${S.passes} speler${S.passes > 1 ? 's hebben' : ' heeft'} gepast. ${sub}`;
+  app.innerHTML = `<div class="game">
+    <header class="top"><span class="brand">Sint-Petersburg</span><span class="rnd num">Ronde ${S.round}${S.lastRound ? ' <span class="last">· laatste ronde</span>' : ''}</span>${S.over ? '' : `<span class="phasepill ${PH[S.phase].key}">Fase ${S.phase + 1} van 4: ${PH[S.phase].name}</span>`}
+      <button class="btn small" data-act="menu">Menu</button></header>
+    <section class="rivals" aria-label="Tegenstanders">${rivals}</section>
+    <section class="board" aria-label="Speelbord">
+      ${skylineSVG('wm')}
+      ${S.lastRound && !S.over ? '<div class="lastribbon">Laatste ronde · na de ruilkaartenfase is het spel voorbij</div>' : ''}
+      ${trackHTML()}
+      <div class="decks${S.over ? '' : ' live'}">${decks}</div>
+      <div class="rowlbl">Bovenste rij <span>volle prijs</span></div>
+      <div class="slots">${slotRow('upper')}</div>
+      <div class="rowlbl">Onderste rij <span class="plaque">−1 ₽</span><span>verdwijnt aan het eind van de ronde</span></div>
+      <div class="slots">${slotRow('lower')}</div>
+      ${bonusHTML()}
+    </section>
+    <section class="mytable${mine ? ' turn' : ''}" aria-label="Jouw tafel">
+      <div class="mt-head">${pawnSVG(0, 20)}<h2>${esc(me.name)}</h2><span class="vpbadge num">${me.vp} ★</span><span class="muted" style="font-size:.88em">Begint bij: ${markersOf(0).join(', ') || '—'}</span></div>
+      <div class="mt-top">
+        <div class="zone"><h3>Geld</h3>${moneyHTML(me.money, true)}</div>
+        <div class="zone"><h3>Hand <small>gratis bewaren · aan het eind −5 punten per kaart</small></h3><div class="handslots">${handSlots}</div></div>
+      </div>
+      <div class="zone"><h3>Jouw stad</h3>${tableauHTML(me)}</div>
+    </section>
+  </div>
+  <div class="actionbar"><div class="ab-in">
+    <div class="ab-msg">${S.over ? '' : `<span class="phasepill ${PH[S.phase].key}">${PH[S.phase].name}</span>` + pawnSVG(S.cur, 18)}<div role="status" aria-live="polite"><b>${esc(now)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div></div>
+    <div class="ab-btns">
+      ${S.over ? `<button class="btn primary" data-act="show-final">Uitslag</button><button class="btn" data-act="again">Nieuw spel</button>` : `
+      ${canObs(me) ? `<button class="btn" data-act="obs-open" ${mine ? '' : 'disabled'}>Sterrenwacht</button>` : ''}
+      <button class="btn" data-act="undo" ${undoSnap ? '' : 'disabled'}>Terug</button>
+      <button class="btn" data-act="tip" ${mine ? '' : 'disabled'}>Tip</button>
+      <button class="btn primary" data-act="pass" ${mine ? '' : 'disabled'}>Passen</button>`}
+    </div></div></div>`;
+}
+
+function render(){
+  document.documentElement.classList.toggle('groot', !!settings.big);
+  if(ui.view === 'start' || !S) renderStart(); else renderGame();
+  renderModal();
+  if(S && ui.view === 'game'){
+    if(S.scoreId !== ui.shownScore && S.lastScore){ ui.shownScore = S.scoreId; ui.queue.push({k:'score'}); }
+    if((S.announceId || 0) !== ui.shownAnnounce){ ui.shownAnnounce = S.announceId; ui.queue.push({k:'last'}); }
+    if(S.bannerId !== ui.shownBanner && !ui.queue.length){
+      ui.shownBanner = S.bannerId;
+      bannerEl.innerHTML = `<div class="banner"><div><small>Ronde ${S.round}${S.lastRound ? ' · laatste ronde' : ''}</small><strong>${PH[S.phase].name}</strong></div></div>`;
+      clearTimeout(bannerTimer); bannerTimer = setTimeout(() => bannerEl.innerHTML = '', 2000);
+    }
+    if((S.moveId || 0) !== ui.shownMove){
+      ui.shownMove = S.moveId || 0;
+      const m = S.move;
+      if(m && m.pi !== 0){
+        const dur = m.id ? Math.max(1600, Math.min(3200, delay() * 1.8)) : Math.max(1200, Math.min(2200, delay() * 1.4));
+        toastEl.innerHTML = `<div class="movetoast${m.id ? '' : ' pass'}" style="--d:${dur}ms">${m.id ? `<div class="mini-wrap">${cardHTML({u:'t', id:m.id}, {mini:true})}</div>` : ''}<div><b>${pawnSVG(m.pi, 14)} ${esc(S.players[m.pi].name)}</b><span>${esc(m.short)}</span></div></div>`;
+        clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.innerHTML = '', dur);
+      }
+    }
+    renderModal();
+  }
+}
+
+/* ---------- modals ---------- */
+function priceCalc(p, c, src, rep){
+  const parts = priceParts(p, c, src, rep), pr = price(p, c, src, rep);
+  return `${c.cost} ₽ ${parts.map(x => `− ${x[0]} (${esc(x[1])})`).join(' ')} = <b>${pr} ₽</b>${c.cost - parts.reduce((s, x) => s + x[0], 0) < 1 ? ' (minimaal 1 ₽)' : ''}`;
+}
+function scoringTxt(c){
+  const when = {worker:'na de arbeidersfase', building:'na de gebouwenfase', aristocrat:'na de aristocratenfase'}[c.type];
+  if(c.per) return `Levert elke ronde 1 roebel op per ${TYPE_PL[c.per]} die je hebt, ${when}.`;
+  const g = []; if(c.r) g.push(`${c.r} roebel${c.r > 1 ? 's' : ''}`); if(c.vp) g.push(`${c.vp} punt${c.vp > 1 ? 'en' : ''}`);
+  return g.length ? `Levert elke ronde ${g.join(' en ')} op, ${when}.` : 'Levert zelf geen roebels of punten op.';
+}
+function replaceNeedTxt(c){
+  if(c.type === 'worker'){ const base = Object.values(CAT).find(x => !x.trade && x.sub === c.sub); return `een ${base.name} of Tsaar Peter`; }
+  return c.type === 'building' ? 'een gewoon gebouw' : 'een gewone aristocraat';
+}
+function cardInfo(inst){
+  const c = C(inst);
+  return `<div class="sheet-top">${cardHTML(inst)}<div style="display:grid;gap:8px;min-width:0">
+    <h2>${esc(c.name)}</h2>
+    <p class="muted">${c.trade ? 'Ruilkaart · ' : ''}${TYPE_NL[c.type]} · kost ${c.cost} ₽</p>
+    <p>${scoringTxt(c)}</p>
+    ${c.trade ? `<p>Vervangt ${replaceNeedTxt(c)} die je al hebt. Je betaalt het verschil; de oude kaart gaat weg.</p>` : ''}
+    ${c.desc ? `<p>${esc(c.desc)}</p>` : ''}
+    ${c.type === 'aristocrat' ? `<p class="muted">Elke andere soort aristocraat verhoogt je eindbonus.</p>` : ''}
+  </div></div>`;
+}
+function cardSheet(m){
+  const p = S.players[0];
+  let inst, src = m.src;
+  if(src === 'upper' || src === 'lower') inst = rowArr(src)[m.i];
+  else if(src === 'hand') inst = p.hand[m.i];
+  else inst = {u:'v', id:m.id};
+  if(!inst){ ui.modal = null; return ''; }
+  const c = C(inst), info = cardInfo(inst);
+  if(src !== 'upper' && src !== 'lower' && src !== 'hand') return info + `<div class="btns"><button class="btn" data-act="close">Sluiten</button></div>`;
+  let body = '';
+  if(!isMyTurn()){
+    body = `<p class="muted">Je kunt deze kaart kopen zodra je aan de beurt bent.</p>`;
+  } else {
+    const opts = buyOptions(p, inst, src), btns = [];
+    if(c.trade && !opts.length) body += `<p class="reason">Je hebt nog geen ${replaceNeedTxt(c)} om te vervangen.</p>`;
+    opts.forEach(o => {
+      const rep = o.rep ? p.cards.find(x => x.u === o.rep) : null, ok = o.price <= p.money;
+      const label = rep ? `Vervang ${esc(C(rep).name)} · ${o.price} ₽` : `${src === 'hand' ? 'Spelen' : 'Kopen'} voor ${o.price} ₽`;
+      btns.push(`<div style="display:grid;gap:4px"><button class="btn primary" data-act="buy" data-src="${src}" data-i="${m.i}" data-rep="${o.rep || ''}" ${ok ? '' : 'disabled'}>${label}</button>
+        ${o.price !== c.cost ? `<span class="calc">${priceCalc(p, c, src, rep)}</span>` : ''}${ok ? '' : `<span class="reason">Te weinig roebels: je hebt ${p.money} ₽.</span>`}</div>`);
+    });
+    if(src !== 'hand'){
+      const full = p.hand.length >= handLimit(p);
+      btns.push(`<div style="display:grid;gap:4px"><button class="btn" data-act="take" data-src="${src}" data-i="${m.i}" ${full ? 'disabled' : ''}>In je hand nemen (gratis)</button>
+        ${full ? `<span class="reason">Je hand is vol (${p.hand.length} van ${handLimit(p)}).</span>` : ''}</div>`);
+    }
+    body += `<div class="btns col">${btns.join('')}</div>`;
+  }
+  return info + body + `<div class="btns"><button class="btn" data-act="close">Sluiten</button></div>`;
+}
+function rivalSheet(pi){
+  const p = S.players[pi];
+  return `<div style="display:flex;align-items:center;gap:10px">${pawnSVG(pi, 22)}<h2>${esc(p.name)}</h2><span class="muted">${LEVEL_NL[p.bot]}</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">${moneyHTML(p.money, false)}<span class="vpbadge num">${p.vp} ★</span><span class="muted">${p.hand.length} kaart${p.hand.length === 1 ? '' : 'en'} in de hand · begint bij: ${markersOf(pi).join(', ') || '—'}</span></div>
+    ${tableauHTML(p)}
+    <div class="btns"><button class="btn primary" data-act="close">Sluiten</button></div>`;
+}
+function rulesSheet(){
+  return `<h2>Spelregels</h2><div class="rules">
+  <p>Je speelt de eerste editie (2004). Je begint met ${START_MONEY} roebels (₽). Wie aan het eind de meeste punten (★) heeft, wint.</p>
+  <h3>Een ronde: vier fasen</h3>
+  <ul><li><b>Arbeiders</b> (groen): leveren roebels op.</li><li><b>Gebouwen</b> (blauw): leveren vooral punten op.</li><li><b>Aristocraten</b> (oranje): leveren roebels en punten op, en een grote bonus aan het eind.</li><li><b>Ruilkaarten</b>: betere versies van kaarten die je al hebt.</li></ul>
+  <p>Aan het begin van elke fase komen er kaarten van die stapel in de bovenste rij, tot er in beide rijen samen ${ROW} kaarten liggen.</p>
+  <h3>Je beurt</h3>
+  <ul><li><b>Kopen</b>: betaal de prijs en leg de kaart bij je stad.</li><li><b>In je hand nemen</b>: gratis bewaren (maximaal 3) en later betalen.</li><li><b>Uit je hand spelen</b>: betaal de prijs.</li><li><b>Passen</b>: je mag later in dezelfde fase weer meedoen. De fase eindigt pas als iedereen na elkaar heeft gepast.</li></ul>
+  <h3>Telling</h3>
+  <p>Na de arbeidersfase krijgt iedereen de roebels en punten van zijn groene kaarten. Na de gebouwenfase die van zijn blauwe kaarten, en na de aristocratenfase die van zijn oranje kaarten. De ruilkaartenfase heeft geen telling. Ruilkaarten tellen mee met hun eigen kleur.</p>
+  <h3>Korting</h3>
+  <ul><li>1 ₽ korting voor elke gelijke kaart die je al hebt.</li><li>1 ₽ korting in de onderste rij.</li><li>Timmerwerkplaats: 1 ₽ korting op gebouwen. Goudsmelterij: 1 ₽ korting op aristocraten.</li><li>Een ruilkaart vervangt een gewone kaart (geen andere ruilkaart) van dezelfde kleur. Je betaalt de prijs min de waarde van de oude kaart. Groene ruilkaarten passen alleen op de juiste soort arbeider (of op Tsaar Peter).</li><li>Je betaalt altijd minstens 1 ₽.</li></ul>
+  <h3>Einde van de ronde</h3>
+  <p>De onderste rij gaat weg, de bovenste rij schuift naar beneden en de startspelers schuiven één plaats door.</p>
+  <h3>Einde van het spel</h3>
+  <p>Raakt een stapel op, dan wordt de ronde nog afgemaakt. Daarna:</p>
+  <ul><li>Bonus voor verschillende soorten aristocraten: 1, 3, 6, 10, 15, 21, 28, 36, 45, 55 punten.</li><li>1 punt per 10 ₽.</li><li>−5 punten voor elke kaart in je hand.</li><li>Bij gelijkspel wint wie de meeste roebels heeft.</li></ul>
+  </div><div class="btns"><button class="btn primary" data-act="close">Sluiten</button></div>`;
+}
+function cardsSheet(){
+  const groups = [['worker','Arbeiders'],['building','Gebouwen'],['aristocrat','Aristocraten'],['trade','Ruilkaarten']];
+  const yieldCell = c => [c.per ? `1 ₽ per ${TYPE_PL[c.per]}` : (c.r ? c.r + ' ₽' : ''), c.vp ? c.vp + ' ★' : ''].filter(Boolean).join(' + ') || '–';
+  const rows = deck => Object.values(CAT).filter(c => c.deck === deck).map(c => `<tr><td><span class="dot ${c.type}" style="margin-right:6px"></span>${esc(c.name)}</td><td class="n">${c.n}</td><td class="n">${c.cost} ₽</td><td class="n">${yieldCell(c)}</td><td style="white-space:normal;min-width:160px">${c.trade ? 'Vervangt ' + replaceNeedTxt(c) + '. ' : ''}${esc(c.desc)}</td></tr>`).join('');
+  return `<h2>Kaartenlijst</h2>` +
+    groups.map(([deck, title]) => `<h3 style="font-size:1.1em;color:var(--emerald)">${title} · ${Object.values(CAT).filter(c => c.deck === deck).reduce((s, c) => s + c.n, 0)} kaarten</h3>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th>Kaart</th><th class="n">Aantal</th><th class="n">Kosten</th><th class="n">Opbrengst</th><th>Bijzonder</th></tr></thead><tbody>${rows(deck)}</tbody></table></div>`).join('') +
+    `<p class="note">Waarden volgen het kaartoverzicht van de eerste editie. Het aantal exemplaren per kaart staat daar niet op; die aantallen zijn geschat.</p><div class="btns"><button class="btn primary" data-act="close">Sluiten</button></div>`;
+}
+function logSheet(){
+  return `<h2>Verloop</h2><ol class="loglist">${S.log.slice().reverse().map(l => `<li class="${l.cls}">${esc(l.txt)}</li>`).join('')}</ol><div class="btns"><button class="btn primary" data-act="close">Sluiten</button></div>`;
+}
+function menuSheet(){
+  return `<h2>Menu</h2>
+  <div class="btns"><button class="btn" data-act="rules">Spelregels</button><button class="btn" data-act="cards">Kaartenlijst</button><button class="btn" data-act="log">Verloop van het spel</button></div>
+  <div><span style="font-weight:700;display:block;margin-bottom:6px">Tempo van de bots</span><div class="seg">${[['slow','Rustig'],['normal','Normaal'],['fast','Snel']].map(([k, t]) => `<button data-act="set" data-k="speed" data-v="${k}" aria-pressed="${settings.speed === k}">${t}</button>`).join('')}</div></div>
+  <label class="check"><input type="checkbox" id="m-big" ${settings.big ? 'checked' : ''}> Grote tekst en kaarten</label>
+  <div class="btns col"><button class="btn primary" data-act="close">Terug naar het spel</button><button class="btn" data-act="home">Naar het beginscherm</button></div>
+  <p class="muted" style="font-size:.9em">Het spel wordt automatisch bewaard in deze browser. Je kunt later verder spelen.</p>`;
+}
+function pubSheet(){
+  const {max} = S.pending, k = ui.pubK == null ? max : Math.min(ui.pubK, max), p = S.players[0];
+  return `<h2>Kroeg</h2><p>Je mag 2 ₽ betalen voor elk punt, tot ${max} punt${max > 1 ? 'en' : ''}. Je hebt ${p.money} ₽.</p>
+  <div class="stepper"><button class="btn" data-act="pub-dec" aria-label="Minder">−</button><output class="num">${k}</output><button class="btn" data-act="pub-inc" aria-label="Meer">+</button><span class="muted">punt${k === 1 ? '' : 'en'} voor ${2 * k} ₽</span></div>
+  <div class="btns"><button class="btn primary" data-act="pub-ok" data-k="${k}">Bevestigen</button><button class="btn" data-act="pub-zero">Niets kopen</button></div>`;
+}
+function obsChooseSheet(){
+  return `<h2>Sterrenwacht</h2><p>Kies van welke stapel je de bovenste kaart trekt. Daarna mag je hem kopen, in je hand nemen of wegleggen. De laatste kaart van een stapel mag je niet trekken.</p>
+  <div class="btns col">${Object.keys(S.decks).map(d => `<button class="btn" data-act="obs" data-deck="${d}" ${S.decks[d].length > 1 ? '' : 'disabled'}><span class="dot ${d}"></span>${DECK_NL[d]} (${S.decks[d].length} kaarten)</button>`).join('')}</div>
+  <div class="btns"><button class="btn" data-act="close">Annuleren</button></div>`;
+}
+function obsResultSheet(){
+  const p = S.players[0], inst = S.pending.inst, c = C(inst), opts = buyOptions(p, inst, 'hand');
+  const full = p.hand.length >= handLimit(p);
+  return `<h2>Sterrenwacht</h2>${cardInfo(inst)}
+  <div class="btns col">${opts.map(o => { const rep = o.rep ? p.cards.find(x => x.u === o.rep) : null, ok = o.price <= p.money;
+    return `<button class="btn primary" data-act="obs-buy" data-rep="${o.rep || ''}" ${ok ? '' : 'disabled'}>${rep ? `Vervang ${esc(C(rep).name)} · ` : 'Kopen voor '}${o.price} ₽</button>`; }).join('')}
+    ${c.trade && !opts.length ? `<p class="reason">Je hebt nog geen ${replaceNeedTxt(c)} om te vervangen.</p>` : ''}
+    <button class="btn" data-act="obs-hand" ${full ? 'disabled' : ''}>In je hand nemen</button>
+    <button class="btn" data-act="obs-discard">Wegleggen</button></div>`;
+}
+function scoreSheet(){
+  const ls = S.lastScore, ph = PH[ls.phase];
+  const rows = ls.parts.map(x => { const p = S.players[x.i];
+    return `<div class="ovs-row${x.i === 0 ? ' me' : ''}">${pawnSVG(x.i, 18)}<span class="who">${esc(x.name)}</span>
+      <span class="gain">${x.r ? `<span><i class="gainbill"></i>+${x.r} ₽</span>` : ''}${x.v ? `<span>+${x.v} ★</span>` : ''}${!x.r && !x.v ? '<span class="zero">niets</span>' : ''}</span>
+      <span class="after">Nu ${p.money} ₽ en ${p.vp} punten</span></div>`; }).join('');
+  const pub = (ls.pub || []).map(x => `${esc(x.name)} kocht in de Kroeg ${x.k} punt${x.k > 1 ? 'en' : ''}.`).join(' ');
+  return `<div style="display:flex;align-items:center;gap:10px"><span class="dot ${ph.key}" style="width:14px;height:14px"></span><h2>Telling ${ph.name.toLowerCase()}</h2></div>
+    <p class="muted">${ls.phase === 0 ? 'Iedereen krijgt de roebels van zijn arbeiders.' : ls.phase === 1 ? 'Iedereen krijgt de punten (en roebels) van zijn gebouwen.' : 'Iedereen krijgt de roebels en punten van zijn aristocraten.'}</p>
+    <div class="ovs">${rows}</div>${pub ? `<p class="muted">${pub}</p>` : ''}
+    <div class="autoclose" style="--d:6500ms"></div>
+    <div class="btns"><button class="btn primary" data-act="ov-ok">Verder</button></div>`;
+}
+function lastSheet(){
+  return `<div class="ov-last"><span class="big">Laatste ronde!</span>
+    <p>De stapel <b>${esc(S.announceDeck || '')}</b> is op. Na de ruilkaartenfase van deze ronde is het spel afgelopen.</p>
+    <ul><li>Geef je roebels uit: aan het eind is 10 ₽ maar 1 punt waard.</li><li>Speel de kaarten uit je hand: elke kaart die overblijft kost 5 punten.</li><li>Nieuwe soorten aristocraten verhogen je eindbonus.</li></ul>
+    <button class="btn primary" data-act="ov-ok">Begrepen</button></div>`;
+}
+function dismissQueue(){ clearTimeout(queueTimer); ui.queue.shift(); renderModal(); tick(); }
+function finalSheet(){
+  const f = S.final, win = f[0], iWon = win.i === 0;
+  return `<h2>${iWon ? 'Gefeliciteerd, je hebt gewonnen!' : `${esc(win.name)} wint`}</h2>
+  <p class="muted">${iWon ? 'Sint-Petersburg is trots op zijn nieuwe bouwmeester.' : 'Volgende keer beter. Probeer het nog eens!'}</p>
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>Speler</th><th class="n">Totaal</th><th class="n">Tijdens spel</th><th class="n">Aristocraten</th><th class="n">Roebels</th><th class="n">Hand</th></tr></thead><tbody>
+  ${f.map((r, i) => `<tr class="${i === 0 ? 'win' : ''}"><td>${pawnSVG(r.i, 12)} ${esc(r.name)}</td><td class="n"><b>${r.total}</b></td><td class="n">${r.vp}</td><td class="n">+${r.bonus} <span class="muted">(${r.kinds} soorten)</span></td><td class="n">+${r.geld} <span class="muted">(${r.money} ₽)</span></td><td class="n">${r.hand}</td></tr>`).join('')}
+  </tbody></table></div>
+  <div class="btns"><button class="btn primary" data-act="again">Nog een keer</button><button class="btn" data-act="hide-final">Bord bekijken</button><button class="btn" data-act="home">Beginscherm</button></div>`;
+}
+function renderModal(){
+  let html = '', wide = false;
+  if(S && ui.view === 'game' && ui.queue.length){
+    const q = ui.queue[0];
+    html = q.k === 'score' ? scoreSheet() : lastSheet();
+    if(q.k === 'score' && !q.timer){ q.timer = true; clearTimeout(queueTimer); queueTimer = setTimeout(() => { if(ui.queue[0] === q) dismissQueue(); }, 6500); }
+  }
+  else if(S && ui.view === 'game'){
+    if(S.over && !ui.hideFinal){ html = finalSheet(); wide = true; }
+    else if(S.pending && S.pending.pi === 0 && S.pending.t === 'pub') html = pubSheet();
+    else if(S.pending && S.pending.pi === 0 && S.pending.t === 'obs') html = obsResultSheet();
+  }
+  if(!html && ui.modal){
+    const m = ui.modal;
+    if(m.k === 'card') html = cardSheet(m);
+    else if(m.k === 'rival'){ html = rivalSheet(m.pi); wide = true; }
+    else if(m.k === 'rules') html = rulesSheet();
+    else if(m.k === 'cards'){ html = cardsSheet(); wide = true; }
+    else if(m.k === 'log') html = logSheet();
+    else if(m.k === 'menu') html = menuSheet();
+    else if(m.k === 'obs') html = obsChooseSheet();
+  }
+  modalEl.innerHTML = html ? `<div class="modal" data-act="backdrop"><div class="sheet${wide ? ' wide' : ''}" role="dialog" aria-modal="true">${html}</div></div>` : '';
+}
+
+/* ---------- flow ---------- */
+function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify({S, settings})); }catch(e){} }
+function delay(passing){ const base = {slow:1700, normal:1000, fast:420}[settings.speed] || 1000; return passing ? base * 0.6 : base; }
+function tick(){
+  save(); render();
+  clearTimeout(botTimer);
+  if(!S || S.over || S.pending || ui.view !== 'game' || ui.queue.length) return;
+  const p = S.players[S.cur];
+  if(p.bot){
+    const choice = bestAction(S.cur, p.bot);
+    botTimer = setTimeout(() => { if(S.players[S.cur] !== p) return; S.flash = null; doAction(S.cur, choice.a); tick(); }, delay(choice.a.t === 'pass'));
+  }
+}
+function humanAct(a){
+  if(!isMyTurn()) return;
+  undoSnap = JSON.stringify(S);
+  ui.tipU = null; S.flash = null;
+  doAction(0, a);
+  ui.modal = null;
+  tick();
+}
+function showTip(){
+  const b = bestAction(0, 'hard'), p = S.players[0], a = b.a;
+  let txt;
+  if(a.t === 'pass') txt = 'Tip: passen lijkt nu verstandig. Bewaar je roebels voor betere kaarten.';
+  else if(a.t === 'obs') txt = 'Tip: gebruik je Sterrenwacht en trek een kaart.';
+  else if(a.t === 'take'){ const inst = rowArr(a.src)[a.i]; ui.tipU = inst.u; txt = `Tip: neem ${C(inst).name} in je hand, dan kun je hem later kopen.`; }
+  else { const inst = (a.src === 'hand' ? p.hand : rowArr(a.src))[a.i]; ui.tipU = inst.u;
+    const rep = a.rep ? p.cards.find(x => x.u === a.rep) : null;
+    txt = `Tip: ${a.src === 'hand' ? 'speel' : 'koop'} ${C(inst).name} voor ${price(p, C(inst), a.src, rep)} ₽${rep ? ` en vervang je ${C(rep).name}` : ''}.`; }
+  S.lastAct = txt;
+  render();
+}
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if(!el) return;
+  const act = el.dataset.act, d = el.dataset;
+  if(act === 'backdrop'){ if(e.target !== el) return; if(ui.queue.length){ if(ui.queue[0].k === 'score') dismissQueue(); return; } if(!(S && S.pending && S.pending.pi === 0) && !(S && S.over && !ui.hideFinal)){ ui.modal = null; renderModal(); } return; }
+  switch(act){
+    case 'set': settings[d.k] = d.k === 'bots' ? +d.v : d.v; save(); render(); break;
+    case 'new': if(S && !S.over){ ui.confirmNew = true; render(); } else startNew(); break;
+    case 'new-yes': startNew(); break;
+    case 'new-no': ui.confirmNew = false; render(); break;
+    case 'resume': if(!S){ try{ S = JSON.parse(localStorage.getItem(SAVE_KEY)).S; }catch(e){} } if(S){ ui.view = 'game'; syncShown(); ui.hideFinal = false; tick(); } break;
+    case 'again': startNew(); break;
+    case 'home': ui.view = 'start'; ui.modal = null; ui.confirmNew = false; clearTimeout(botTimer); render(); break;
+    case 'rules': ui.modal = {k:'rules'}; renderModal(); break;
+    case 'cards': ui.modal = {k:'cards'}; renderModal(); break;
+    case 'log': ui.modal = {k:'log'}; renderModal(); break;
+    case 'menu': ui.modal = {k:'menu'}; renderModal(); break;
+    case 'close': ui.modal = null; renderModal(); break;
+    case 'card': ui.modal = {k:'card', src:d.src, i:+d.i}; renderModal(); break;
+    case 'view': ui.modal = {k:'card', src:'view', id:d.id}; renderModal(); break;
+    case 'rival': ui.modal = {k:'rival', pi:+d.pi}; renderModal(); break;
+    case 'buy': humanAct({t:'buy', src:d.src, i:+d.i, rep:d.rep || null}); break;
+    case 'take': humanAct({t:'take', src:d.src, i:+d.i}); break;
+    case 'pass': humanAct({t:'pass'}); break;
+    case 'tip': if(isMyTurn()) showTip(); break;
+    case 'undo': if(undoSnap){ clearTimeout(botTimer); S = JSON.parse(undoSnap); undoSnap = null; S.lastAct = 'Je laatste zet is teruggenomen.'; ui.modal = null; syncShown(); tick(); } break;
+    case 'obs-open': if(isMyTurn()){ ui.modal = {k:'obs'}; renderModal(); } break;
+    case 'obs': if(isMyTurn()){ undoSnap = null; ui.modal = null; doAction(0, {t:'obs', deck:d.deck}); tick(); } break;
+    case 'obs-buy': resolveObs({t:'buy', rep:d.rep || null}); tick(); break;
+    case 'obs-hand': resolveObs({t:'hand'}); tick(); break;
+    case 'obs-discard': resolveObs({t:'discard'}); tick(); break;
+    case 'pub-inc': ui.pubK = Math.min(S.pending.max, (ui.pubK == null ? S.pending.max : ui.pubK) + 1); renderModal(); break;
+    case 'pub-dec': ui.pubK = Math.max(0, (ui.pubK == null ? S.pending.max : ui.pubK) - 1); renderModal(); break;
+    case 'pub-ok': case 'pub-zero': { const k = act === 'pub-zero' ? 0 : +d.k; S.pending = null; ui.pubK = null; undoSnap = null; applyPub(0, k); nextPub(); tick(); break; }
+    case 'ov-ok': dismissQueue(); break;
+    case 'hide-final': ui.hideFinal = true; renderModal(); break;
+    case 'show-final': ui.hideFinal = false; renderModal(); break;
+  }
+});
+document.addEventListener('input', e => { if(e.target.id === 'f-name'){ settings.name = e.target.value; save(); } });
+document.addEventListener('change', e => { if(e.target.id === 'f-big' || e.target.id === 'm-big'){ settings.big = e.target.checked; save(); render(); } });
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && ui.modal){ ui.modal = null; renderModal(); } });
+
+function startNew(){
+  clearTimeout(botTimer);
+  settings.name = (document.getElementById('f-name') || {value:settings.name}).value || settings.name;
+  newGame();
+  ui = {view:'game', modal:null, tipU:null, confirmNew:false, shownBanner:0, shownScore:0, shownAnnounce:0, shownMove:S.moveId || 0, queue:[], hideFinal:false};
+  tick();
+}
+
+function boot(data){
+  document.documentElement.lang = 'nl';
+  try{
+    const saved = data && data.S !== undefined ? data : JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+    if(saved){ if(saved.settings) settings = Object.assign(settings, saved.settings); if(saved.S && !saved.S.over) S = saved.S; }
+  }catch(e){}
+  if(S) syncShown();
+  if(data && data.view === 'game' && S) ui.view = 'game';
+  render();
+  if(ui.view === 'game') tick();
+}
+boot({});
+</script>
+
+<script>
+// Offline: de service worker bewaart het spel op het apparaat
+if('serviceWorker' in navigator){ window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); }); }
+</script>
+</body>
+</html>

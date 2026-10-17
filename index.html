@@ -420,6 +420,7 @@ const ARI = [0,1,3,6,10,15,21,28,36,45,55];
 const BOT_NAMES = ['Anna','Boris','Katja'];
 const PAWN = ['#b3261e','#5b3a9b','#2e2e2e','#f3efe3'];
 const SAVE_KEY = 'spb-nl-2';
+const APP_VERSION = 7; // ophogen bij elke nieuwe versie
 
 /* ================================================================
    SPELREGELS (engine)
@@ -1208,7 +1209,7 @@ function menuSheet(){
   <div><span style="font-weight:700;display:block;margin-bottom:6px">Tempo van de bots</span><div class="seg">${[['slow','Rustig'],['normal','Normaal'],['fast','Snel']].map(([k, t]) => `<button data-act="set" data-k="speed" data-v="${k}" aria-pressed="${settings.speed === k}">${t}</button>`).join('')}</div></div>
   <label class="check"><input type="checkbox" id="m-big" ${settings.big ? 'checked' : ''}> Grote tekst en kaarten</label>
   <div class="btns col"><button class="btn primary" data-act="close">Terug naar het spel</button><button class="btn" data-act="home">Naar het beginscherm</button></div>
-  <p class="muted" style="font-size:.9em">Het spel wordt automatisch bewaard in deze browser. Je kunt later verder spelen.</p>`;
+  <p class="muted" style="font-size:.9em">Het spel wordt automatisch bewaard in deze browser. Je kunt later verder spelen. · Versie ${APP_VERSION}</p>`;
 }
 function pubSheet(){
   const {max} = S.pending, k = ui.pubK == null ? max : Math.min(ui.pubK, max), p = S.players[0];
@@ -1429,6 +1430,7 @@ function boot(data){
   }catch(e){}
   if(S) syncShown();
   if(data && data.view === 'game' && S) ui.view = 'game';
+  try{ if(sessionStorage.getItem('spb-resume') && S){ sessionStorage.removeItem('spb-resume'); ui.view = 'game'; } }catch(e){}
   render();
   if(ui.view === 'game') tick();
 }
@@ -1437,7 +1439,23 @@ boot({});
 
 <script>
 // Offline: de service worker bewaart het spel op het apparaat
-if('serviceWorker' in navigator){ window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); }); }
+if('serviceWorker' in navigator){
+  const hadController = !!navigator.serviceWorker.controller;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // Bij terugkeren naar de app: kijken of er een nieuwe versie is
+      document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') reg.update().catch(() => {}); });
+    }).catch(() => {});
+  });
+  // Nieuwe versie actief: herladen en het spel gewoon laten doorgaan
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(!hadController || reloading) return;
+    reloading = true;
+    try{ save(); if(ui.view === 'game') sessionStorage.setItem('spb-resume', '1'); }catch(e){}
+    location.reload();
+  });
+}
 </script>
 </body>
 </html>

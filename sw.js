@@ -1,6 +1,6 @@
 // Service worker: bewaart het spel op het apparaat, zodat het ook zonder internet werkt.
 // Verhoog VERSION bij elke nieuwe versie van het spel.
-const VERSION = 'spb-v6';
+const VERSION = 'spb-v7';
 const APP_FILES = [
   './',
   './index.html',
@@ -14,7 +14,7 @@ const FONT_CSS = 'https://fonts.googleapis.com/css2?family=Prata&family=PT+Sans:
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(VERSION);
-    await cache.addAll(APP_FILES);
+    await cache.addAll(APP_FILES.map(u => new Request(u, {cache: 'reload'})));
     // Lettertypen meenemen, zodat het spel offline er hetzelfde uitziet
     try {
       const res = await fetch(FONT_CSS, {mode: 'cors'});
@@ -37,21 +37,29 @@ self.addEventListener('activate', event => {
   })());
 });
 
-// Eerst uit de opslag (direct en offline), op de achtergrond bijwerken als er internet is
+const timeout = ms => new Promise(resolve => setTimeout(() => resolve(null), ms));
+
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
   event.respondWith((async () => {
     const cache = await caches.open(VERSION);
-    const cached = await cache.match(req, {ignoreSearch: req.mode === 'navigate'});
+    // De pagina zelf: eerst het internet proberen (nieuwste versie), na 3 seconden of zonder internet de bewaarde versie
+    if (req.mode === 'navigate') {
+      const network = fetch(req, {cache: 'no-store'}).then(res => {
+        if (res && res.ok) cache.put('./index.html', res.clone());
+        return res && res.ok ? res : null;
+      }).catch(() => null);
+      const res = await Promise.race([network, timeout(3000)]);
+      return res || (await cache.match('./index.html')) || (await network) || Response.error();
+    }
+    // Overige bestanden: direct uit de opslag, op de achtergrond bijwerken
+    const cached = await cache.match(req);
     const network = fetch(req).then(res => {
       if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
       return res;
     }).catch(() => null);
     if (cached) { event.waitUntil(network); return cached; }
-    const res = await network;
-    if (res) return res;
-    if (req.mode === 'navigate') return (await cache.match('./index.html')) || Response.error();
-    return Response.error();
+    return (await network) || Response.error();
   })());
 });

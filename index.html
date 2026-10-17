@@ -253,6 +253,36 @@ html.groot .mini-wrap{width:62px}
 .ovs-row .after{grid-column:2 / 4;font-size:.85em;color:var(--ink-soft)}
 .gainbill{display:inline-block;width:28px;height:16px;border-radius:2px;border:2.5px solid #b8463a;background:#f8e5e1;box-sizing:border-box;vertical-align:-2px;margin-right:4px}
 .ov-last{text-align:center;display:grid;gap:12px;justify-items:center}
+.sc-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;perspective:800px}
+.sc{display:grid;justify-items:center;gap:6px;min-width:0}
+.sc-card{all:unset;box-sizing:border-box;width:100%;max-width:110px;aspect-ratio:5/7;border-radius:10px;display:grid;place-items:center;align-content:center;gap:8px;text-align:center;color:var(--cream)}
+.sc-card svg{width:55%;height:auto}
+.sc-card.down{background:var(--emerald);box-shadow:inset 0 0 0 4px var(--emerald),inset 0 0 0 6px var(--gold-hi),0 4px 10px rgba(18,61,46,.25);cursor:pointer;transition:transform .15s}
+.sc-card.down:not(:disabled):hover{transform:translateY(-4px)}
+.sc-card.down:not(:disabled){animation:wiggle 1.6s ease-in-out infinite}
+.sc-card.down:disabled{cursor:default;opacity:.85}
+.sc-card.down:focus-visible{outline:3px solid var(--gold-hi);outline-offset:3px}
+.sc-card.up{box-shadow:inset 0 0 0 4px var(--c),inset 0 0 0 6px var(--gold-hi),0 4px 10px rgba(18,61,46,.25);background:var(--c)}
+.sc-card.up.worker{--c:var(--worker)} .sc-card.up.building{--c:var(--building)} .sc-card.up.aristocrat{--c:var(--aristocrat)} .sc-card.up.trade{--c:#5a4a1c}
+.sc-card.up b{font-family:var(--f-display);font-weight:400;font-size:clamp(11px,3vw,16px);overflow-wrap:anywhere;padding:0 4px}
+.sc-card.flip{animation:flip .6s ease-out}
+@keyframes flip{0%{transform:rotateY(90deg) scale(1.1)}100%{transform:none}}
+@keyframes wiggle{0%,100%{transform:none}50%{transform:translateY(-3px)}}
+.sc-who{display:flex;align-items:center;gap:4px;font-weight:700;font-size:.9em;min-height:1.4em;max-width:100%;overflow-wrap:anywhere}
+.sc-msg{font-weight:700;display:flex;align-items:center;gap:6px;justify-content:center;margin:0}
+.sc-sum{display:grid;gap:6px}
+.sc-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border-radius:10px;background:var(--facade)}
+.sc-row.me{background:#f6ecc9;box-shadow:inset 0 0 0 1.5px var(--gold-line)}
+.rot{display:grid;gap:8px}
+.rot-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--facade);animation:rotin .5s ease-out both}
+.rot-row .phasepill{font-size:.85em;justify-self:start}
+.rot-old{color:var(--ink-soft);text-decoration:line-through;display:flex;align-items:center;gap:4px;min-width:0;font-size:.9em}
+.rot-arrow{font-weight:700;color:var(--gold)}
+.rot-new{font-weight:700;display:flex;align-items:center;gap:4px;min-width:0}
+.rot-new.me{color:var(--danger)}
+.rot-me{font-size:1.1em;margin:0}
+@keyframes rotin{0%{opacity:0;transform:translateX(-14px)}100%{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.sc-card.flip,.sc-card.down,.rot-row{animation:none}}
 .ov-last .big{font-family:var(--f-display);font-size:2.2em;color:var(--danger);line-height:1.1}
 .ov-last ul{text-align:left;margin:0;padding-left:1.2em;display:grid;gap:6px}
 .autoclose{height:4px;border-radius:2px;background:var(--gold-hi);transform-origin:left;animation:shrink var(--d,6s) linear forwards}
@@ -407,11 +437,14 @@ function newGame(){
   const n = settings.bots + 1;
   const decks = {worker:[], building:[], aristocrat:[], trade:[]};
   let uid = 0;
-  const off = Math.floor(Math.random() * n); // willekeurige startspeler
+  // startkaarten trekken: om de beurt (vanaf een willekeurige speler) tot alle 4 fasen verdeeld zijn
+  const first = Math.floor(Math.random() * n);
+  const drawSeq = shuffle([0,1,2,3]).map((phase, k) => ({pi:(first + k) % n, phase}));
+  const markers = [0,0,0,0]; drawSeq.forEach(d => markers[d.phase] = d.pi);
   for(const c of Object.values(CAT)) for(let k=0;k<c.n;k++) decks[c.deck].push({u:'k'+(uid++), id:c.id});
   for(const d in decks) shuffle(decks[d]);
   S = {players:[], decks, deckSize:{}, upper:[], lower:[], round:1, phase:0,
-       markers:[0,1,2,3].map(i => (i + off) % n), cur:0, passes:0, lastRound:false,
+       markers, drawSeq, drawDone:false, prevMarkers:null, rotateId:0, cur:0, passes:0, lastRound:false,
        log:[], pending:null, over:false, lastAct:'', lastScore:null, scoreId:0, flash:null, bannerId:0, final:null};
   for(const d in decks) S.deckSize[d] = decks[d].length;
   const mk = (name, bot) => ({name, bot, money:START_MONEY, vp:0, cards:[], hand:[], obsUsed:false});
@@ -589,7 +622,9 @@ function finishPhase(){
   if(S.lastRound) return endGame();
   if(S.lower.length) addLog(`${S.lower.length} kaart${S.lower.length > 1 ? 'en' : ''} uit de onderste rij gaan weg; de bovenste rij schuift naar beneden.`);
   S.lower = S.upper; S.upper = [];
+  S.prevMarkers = S.markers.slice();
   S.markers = S.markers.map(m => (m + 1) % S.players.length);
+  S.rotateId = (S.rotateId || 0) + 1;
   S.round++; S.phase = 0;
   startPhase();
 }
@@ -845,7 +880,7 @@ const bannerEl = document.getElementById('banner');
 const toastEl = document.getElementById('toast');
 let ui = {view:'start', modal:null, tipU:null, confirmNew:false, shownBanner:0, shownScore:0, shownAnnounce:0, shownMove:0, queue:[], hideFinal:false};
 let queueTimer = null;
-function syncShown(){ ui.shownBanner = S.bannerId; ui.shownScore = S.scoreId; ui.shownAnnounce = S.announceId || 0; ui.shownMove = S.moveId || 0; ui.queue = []; }
+function syncShown(){ ui.shownBanner = S.bannerId; ui.shownScore = S.scoreId; ui.shownAnnounce = S.announceId || 0; ui.shownMove = S.moveId || 0; ui.shownRotate = S.rotateId || 0; ui.queue = []; ui.draw = null; }
 let botTimer = null, bannerTimer = null, toastTimer = null;
 
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
@@ -951,7 +986,7 @@ function tableauHTML(p){
         return `<div class="mini-wrap${isNew ? ' new' : ''}">${cardHTML(list[0], {mini:true, act:'view'})}${list.length > 1 ? `<i>×${list.length}</i>` : ''}</div>`; }).join('')}</div>` : `<span class="none">Nog geen ${DECK_NL[type].toLowerCase()}.</span>`}
     </div>`; }).join('')}</div>`;
 }
-function markersOf(pi){ return S.markers.map((m, i) => m === pi ? PH[i].name : null).filter(Boolean); }
+function markersOf(pi){ if(S.drawSeq && !S.drawDone) return ['nog niet getrokken']; return S.markers.map((m, i) => m === pi ? PH[i].name : null).filter(Boolean); }
 
 function trackHTML(){
   const segs = Array.from({length:20}, () => '<span></span>').join('');
@@ -1002,7 +1037,7 @@ function renderGame(){
   const decks = PH.map((ph, i) => {
     const isCur = i === S.phase && !S.over, st = S.markers[i];
     return `<div class="deck d-${ph.deck}${isCur ? ' cur' : ''}"><div class="back ${ph.deck}">${BACK_ICON[ph.deck]}<span class="cnt num">${S.decks[ph.deck].length}</span></div>
-      <b>${ph.name}</b>${isCur ? '<span class="now">nu</span>' : ''}<span class="starter">${pawnSVG(st, 11)}${esc(S.players[st].name)}</span></div>`;
+      <b>${ph.name}</b>${isCur ? '<span class="now">nu</span>' : ''}<span class="starter">${S.drawSeq && !S.drawDone ? '?' : pawnSVG(st, 11) + esc(S.players[st].name)}</span></div>`;
   }).join('');
   let now, sub = S.lastAct || '';
   if(S.over) now = 'Het spel is afgelopen.';
@@ -1052,6 +1087,8 @@ function render(){
   renderModal();
   if(S && ui.view === 'game'){
     if(S.scoreId !== ui.shownScore && S.lastScore){ ui.shownScore = S.scoreId; ui.queue.push({k:'score'}); }
+    if(S.drawSeq && !S.drawDone && !ui.queue.some(q => q.k === 'draw')) ui.queue.unshift({k:'draw'});
+    if((S.rotateId || 0) !== ui.shownRotate){ ui.shownRotate = S.rotateId || 0; if(S.prevMarkers) ui.queue.push({k:'rotate'}); }
     if((S.announceId || 0) !== ui.shownAnnounce){ ui.shownAnnounce = S.announceId; ui.queue.push({k:'last'}); }
     if(S.bannerId !== ui.shownBanner && !ui.queue.length){
       ui.shownBanner = S.bannerId;
@@ -1213,6 +1250,56 @@ function lastSheet(){
     <ul><li>Geef je roebels uit: aan het eind is 10 ₽ maar 1 punt waard.</li><li>Speel de kaarten uit je hand: elke kaart die overblijft kost 5 punten.</li><li>Nieuwe soorten aristocraten verhogen je eindbonus.</li></ul>
     <button class="btn primary" data-act="ov-ok">Begrepen</button></div>`;
 }
+function startCard(phase, owner, fresh){
+  const ph = PH[phase];
+  return `<div class="sc"><div class="sc-card up ${ph.deck}${fresh ? ' flip' : ''}">${BACK_ICON[ph.deck]}<b>${ph.name}</b></div>${owner != null ? `<span class="sc-who">${pawnSVG(owner, 12)}${esc(S.players[owner].name)}</span>` : ''}</div>`;
+}
+function drawPick(pos, pi){
+  const d = ui.draw, seq = S.drawSeq;
+  if(!d || d.step >= seq.length || seq[d.step].pi !== pi || d.picks[pos]) return;
+  d.picks[pos] = {phase:seq[d.step].phase, pi, fresh:true};
+  d.step++; d.timer = null;
+  renderModal();
+}
+function drawSheet(){
+  const d = ui.draw || (ui.draw = {step:0, picks:{}, timer:null});
+  const seq = S.drawSeq, done = d.step >= seq.length, drawer = done ? null : seq[d.step].pi;
+  const n = S.players.length;
+  const cards = [0,1,2,3].map(pos => {
+    const p = d.picks[pos];
+    if(p){ const h = startCard(p.phase, p.pi, p.fresh); p.fresh = false; return h; }
+    return `<div class="sc"><button class="sc-card down" data-act="draw-pick" data-pos="${pos}" ${drawer === 0 ? '' : 'disabled'} aria-label="Startkaart ${pos + 1} trekken"><svg viewBox="0 0 40 32" aria-hidden="true"><path d="M20 2 C14 8 14 12 20 14 C26 12 26 8 20 2Z" fill="#d9b55c"/><rect x="16" y="14" width="8" height="6" fill="#f7eed7"/><rect x="6" y="20" width="28" height="10" fill="#f7eed7"/></svg></button><span class="sc-who">&nbsp;</span></div>`;
+  }).join('');
+  if(!done && drawer !== 0 && !d.timer){
+    d.timer = setTimeout(() => {
+      if(ui.draw !== d) return;
+      const free = [0,1,2,3].filter(pos => !d.picks[pos]);
+      drawPick(free[Math.floor(Math.random() * free.length)], drawer);
+    }, 1100);
+  }
+  const msg = done ? 'Iedereen heeft getrokken.' : drawer === 0 ? 'Jij bent aan de beurt: tik op een kaart.' : `${esc(S.players[drawer].name)} trekt een kaart…`;
+  const summary = done ? `<div class="sc-sum">${S.players.map((p, i) => { const mine = S.markers.map((m, ph) => m === i ? PH[ph].name : null).filter(Boolean);
+      return `<div class="sc-row${i === 0 ? ' me' : ''}">${pawnSVG(i, 16)}<b>${esc(p.name)}</b><span>begint bij ${mine.length ? mine.join(' en ') : 'geen fase'}</span></div>`; }).join('')}</div>` : '';
+  return `<h2>Wie begint welke fase?</h2>
+    <p class="muted">Om de beurt trekt iedereen een startkaart. Wie de kaart van een fase heeft, mag in die fase als eerste kiezen.${n < 4 ? ' Met minder dan vier spelers trekt iemand er twee.' : ''}</p>
+    <p class="sc-msg">${done ? '' : pawnSVG(drawer, 16)} ${msg}</p>
+    <div class="sc-grid">${cards}</div>${summary}
+    ${done ? '<div class="btns"><button class="btn primary" data-act="ov-ok">Spel beginnen</button></div>' : ''}`;
+}
+function rotateSheet(){
+  const prev = S.prevMarkers || S.markers;
+  const mine = S.markers.map((m, ph) => m === 0 ? PH[ph].name : null).filter(Boolean);
+  const rows = PH.map((ph, i) => `<div class="rot-row" style="animation-delay:${i * 180}ms">
+      <span class="phasepill ${ph.key}">${ph.name}</span>
+      <span class="rot-old">${pawnSVG(prev[i], 12)}${esc(S.players[prev[i]].name)}</span>
+      <span class="rot-arrow" aria-hidden="true">→</span>
+      <span class="rot-new${S.markers[i] === 0 ? ' me' : ''}">${pawnSVG(S.markers[i], 14)}${esc(S.players[S.markers[i]].name)}</span></div>`).join('');
+  return `<h2>Ronde ${S.round}: startkaarten schuiven door</h2>
+    <p class="muted">Elke startkaart gaat één speler verder.</p>
+    <div class="rot">${rows}</div>
+    <p class="rot-me">${mine.length ? `Jij begint deze ronde bij <b>${mine.join(' en ')}</b>.` : 'Jij begint deze ronde bij geen enkele fase.'}</p>
+    <div class="btns"><button class="btn primary" data-act="ov-ok">Verder</button></div>`;
+}
 function dismissQueue(){ clearTimeout(queueTimer); ui.queue.shift(); renderModal(); tick(); }
 function finalSheet(){
   const f = S.final, win = f[0], iWon = win.i === 0;
@@ -1227,7 +1314,7 @@ function renderModal(){
   let html = '', wide = false;
   if(S && ui.view === 'game' && ui.queue.length){
     const q = ui.queue[0];
-    html = q.k === 'score' ? scoreSheet() : lastSheet();
+    html = q.k === 'score' ? scoreSheet() : q.k === 'draw' ? drawSheet() : q.k === 'rotate' ? rotateSheet() : lastSheet();
     if(q.k === 'score' && !q.timer){ q.timer = true; clearTimeout(queueTimer); queueTimer = setTimeout(() => { if(ui.queue[0] === q) dismissQueue(); }, 6500); }
   }
   else if(S && ui.view === 'game'){
@@ -1316,7 +1403,8 @@ document.addEventListener('click', e => {
     case 'pub-inc': ui.pubK = Math.min(S.pending.max, (ui.pubK == null ? S.pending.max : ui.pubK) + 1); renderModal(); break;
     case 'pub-dec': ui.pubK = Math.max(0, (ui.pubK == null ? S.pending.max : ui.pubK) - 1); renderModal(); break;
     case 'pub-ok': case 'pub-zero': { const k = act === 'pub-zero' ? 0 : +d.k; S.pending = null; ui.pubK = null; undoSnap = null; applyPub(0, k); nextPub(); tick(); break; }
-    case 'ov-ok': dismissQueue(); break;
+    case 'ov-ok': if(ui.queue[0] && ui.queue[0].k === 'draw'){ S.drawDone = true; ui.draw = null; } dismissQueue(); break;
+    case 'draw-pick': drawPick(+d.pos, 0); break;
     case 'hide-final': ui.hideFinal = true; renderModal(); break;
     case 'show-final': ui.hideFinal = false; renderModal(); break;
   }
@@ -1329,7 +1417,7 @@ function startNew(){
   clearTimeout(botTimer);
   settings.name = (document.getElementById('f-name') || {value:settings.name}).value || settings.name;
   newGame();
-  ui = {view:'game', modal:null, tipU:null, confirmNew:false, shownBanner:0, shownScore:0, shownAnnounce:0, shownMove:S.moveId || 0, queue:[], hideFinal:false};
+  ui = {view:'game', modal:null, tipU:null, confirmNew:false, shownBanner:0, shownScore:0, shownAnnounce:0, shownMove:S.moveId || 0, shownRotate:0, queue:[], draw:null, hideFinal:false};
   tick();
 }
 

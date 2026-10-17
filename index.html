@@ -420,13 +420,13 @@ const ARI = [0,1,3,6,10,15,21,28,36,45,55];
 const BOT_NAMES = ['Anna','Boris','Katja'];
 const PAWN = ['#b3261e','#5b3a9b','#2e2e2e','#f3efe3'];
 const SAVE_KEY = 'spb-nl-2';
-const APP_VERSION = 7; // ophogen bij elke nieuwe versie
+const APP_VERSION = 8; // ophogen bij elke nieuwe versie
 
 /* ================================================================
    SPELREGELS (engine)
    ================================================================ */
 let S = null;
-let settings = {name:'Jij', bots:2, level:'medium', speed:'normal', big:false};
+let settings = {name:'Jij', bots:2, level:'medium', speed:'normal', big:false, sound:true};
 let undoSnap = null;
 
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -873,6 +873,61 @@ const BACK_ICON = {
 };
 
 /* ================================================================
+   GELUID (in de browser gemaakt, werkt ook offline)
+   ================================================================ */
+let actx = null, amaster = null, anoise = null;
+function audioUnlock(){
+  try{
+    if(!actx){
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      amaster = actx.createGain(); amaster.gain.value = 0.6; amaster.connect(actx.destination);
+      anoise = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
+      const d = anoise.getChannelData(0); for(let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if(actx.state === 'suspended') actx.resume();
+  }catch(e){ actx = null; }
+}
+function aEnv(g, t, a, peak, dur){ g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); }
+function aTone(f, t, dur, o){
+  o = o || {}; const osc = actx.createOscillator(), g = actx.createGain();
+  osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(f, t); if(o.glide) osc.frequency.exponentialRampToValueAtTime(o.glide, t + dur);
+  aEnv(g, t, o.a || 0.005, (o.vol || 0.3) * aLevel, dur); osc.connect(g).connect(amaster); osc.start(t); osc.stop(t + dur + 0.05);
+}
+function aNoise(t, dur, o){
+  o = o || {}; const s = actx.createBufferSource(), fl = actx.createBiquadFilter(), g = actx.createGain();
+  s.buffer = anoise; s.playbackRate.value = 0.8 + Math.random() * 0.4;
+  fl.type = o.type || 'bandpass'; fl.frequency.setValueAtTime(o.f || 2000, t); if(o.f2) fl.frequency.exponentialRampToValueAtTime(o.f2, t + dur); fl.Q.value = o.q || 1;
+  aEnv(g, t, o.a || 0.004, (o.vol || 0.3) * aLevel, dur); s.connect(fl).connect(g).connect(amaster); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+}
+function aBell(f, t, dur, vol){ [[1,1],[2,0.6],[2.4,0.4],[3,0.3],[4.2,0.25],[5.4,0.15],[0.5,0.5]].forEach(([r, v], i) => aTone(f * r, t, dur * (i === 6 ? 1.2 : 1 / (1 + i * 0.35)), {vol: vol * v, a: 0.004})); }
+function aCoin(t, vol, base){ const f = base + Math.random() * 1400; aTone(f, t, 0.18, {vol}); aTone(f * 1.48, t, 0.12, {vol: vol * 0.6}); aNoise(t, 0.02, {type:'highpass', f:5000, vol: vol * 0.8}); }
+let aLevel = 1;
+const SOUNDS = {
+  turn(t){ aTone(659, t, 0.35, {vol:0.3}); aTone(1318, t, 0.15, {vol:0.06}); aTone(880, t + 0.16, 0.45, {vol:0.3}); aTone(1760, t + 0.16, 0.18, {vol:0.06}); },
+  buy(t){ aNoise(t, 0.16, {f:1200, f2:3800, q:0.8, vol:0.35, a:0.03}); aNoise(t + 0.15, 0.06, {type:'lowpass', f:900, vol:0.6}); },
+  pass(t){ [0, 0.13].forEach(d => { aTone(190, t + d, 0.12, {vol:0.4, glide:120}); aNoise(t + d, 0.04, {type:'lowpass', f:700, vol:0.5}); }); },
+  money(t){ for(let i = 0; i < 12; i++) aCoin(t + i * 0.035 + Math.random() * 0.05, 0.08, 1800); aNoise(t, 0.25, {type:'lowpass', f:600, vol:0.15, a:0.02}); },
+  points(t){ aTone(1046, t, 0.9, {vol:0.18}); aTone(1568, t, 0.7, {vol:0.08}); aTone(2093, t, 0.4, {vol:0.04}); },
+  phase(t){ for(let i = 0; i < 14; i++) aNoise(t + i * 0.045, 0.035, {f:2500 + Math.random() * 1500, q:1.2, vol:0.25}); },
+  last(t){ aBell(98, t, 4, 0.35); },
+  win(t){ [[523,0,0.18],[659,0.18,0.18],[784,0.36,0.18],[1046,0.54,0.7]].forEach(([f, d, l]) => { aTone(f, t + d, l, {type:'sawtooth', vol:0.07, a:0.02}); aTone(f, t + d, l, {vol:0.1, a:0.02}); }); }
+};
+function playSound(name, delayMs, level){
+  if(!settings.sound || !actx || !SOUNDS[name]) return;
+  try{
+    if(actx.state === 'suspended') actx.resume();
+    aLevel = level || 1;
+    SOUNDS[name](actx.currentTime + 0.03 + (delayMs || 0) / 1000);
+    aLevel = 1;
+  }catch(e){}
+}
+if(typeof document !== 'undefined'){
+  document.addEventListener('pointerdown', audioUnlock, true);
+  document.addEventListener('keydown', audioUnlock, true);
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible' && actx && actx.state === 'suspended') actx.resume().catch(() => {}); });
+}
+
+/* ================================================================
    WEERGAVE
    ================================================================ */
 const app = document.getElementById('app');
@@ -965,6 +1020,7 @@ function renderStart(){
         <div><span class="lbl">Tempo van de bots</span><div class="seg" role="group" aria-label="Tempo">
           ${[['slow','Rustig'],['normal','Normaal'],['fast','Snel']].map(([k, t]) => `<button data-act="set" data-k="speed" data-v="${k}" aria-pressed="${settings.speed === k}">${t}</button>`).join('')}</div></div>
         <label class="check"><input type="checkbox" id="f-big" ${settings.big ? 'checked' : ''}> Grote tekst en kaarten</label>
+        <label class="check"><input type="checkbox" id="f-sound" ${settings.sound ? 'checked' : ''}> Geluid</label>
         <div class="start-actions">
           <button class="btn primary" data-act="new">Nieuw spel</button>
           ${canResume ? `<button class="btn" data-act="resume">Verder spelen (ronde ${resumeRound})</button>` : ''}
@@ -1087,18 +1143,21 @@ function render(){
   if(ui.view === 'start' || !S) renderStart(); else renderGame();
   renderModal();
   if(S && ui.view === 'game'){
-    if(S.scoreId !== ui.shownScore && S.lastScore){ ui.shownScore = S.scoreId; ui.queue.push({k:'score'}); }
+    if(S.scoreId !== ui.shownScore && S.lastScore){ ui.shownScore = S.scoreId; ui.queue.push({k:'score'});
+      const me = S.lastScore.parts.find(x => x.i === 0); if(me && me.r) playSound('money'); if(me && me.v) playSound('points', me.r ? 450 : 0); }
     if(S.drawSeq && !S.drawDone && !ui.queue.some(q => q.k === 'draw')) ui.queue.unshift({k:'draw'});
     if((S.rotateId || 0) !== ui.shownRotate){ ui.shownRotate = S.rotateId || 0; if(S.prevMarkers) ui.queue.push({k:'rotate'}); }
-    if((S.announceId || 0) !== ui.shownAnnounce){ ui.shownAnnounce = S.announceId; ui.queue.push({k:'last'}); }
+    if((S.announceId || 0) !== ui.shownAnnounce){ ui.shownAnnounce = S.announceId; ui.queue.push({k:'last'}); playSound('last', 600); }
     if(S.bannerId !== ui.shownBanner && !ui.queue.length){
-      ui.shownBanner = S.bannerId;
+      ui.shownBanner = S.bannerId; playSound('phase');
       bannerEl.innerHTML = `<div class="banner"><div><small>Ronde ${S.round}${S.lastRound ? ' · laatste ronde' : ''}</small><strong>${PH[S.phase].name}</strong></div></div>`;
       clearTimeout(bannerTimer); bannerTimer = setTimeout(() => bannerEl.innerHTML = '', 2000);
     }
     if((S.moveId || 0) !== ui.shownMove){
       ui.shownMove = S.moveId || 0;
       const m = S.move;
+      if(m && /^(kocht|speelde)/.test(m.short)) playSound('buy', 0, m.pi === 0 ? 1 : 0.6);
+      if(m && m.pi !== 0 && m.short === 'past') playSound('pass', 0, 0.8);
       if(m && m.pi !== 0){
         const dur = m.id ? Math.max(1600, Math.min(3200, delay() * 1.8)) : Math.max(1200, Math.min(2200, delay() * 1.4));
         toastEl.innerHTML = `<div class="movetoast${m.id ? '' : ' pass'}" style="--d:${dur}ms">${m.id ? `<div class="mini-wrap">${cardHTML({u:'t', id:m.id}, {mini:true})}</div>` : ''}<div><b>${pawnSVG(m.pi, 14)} ${esc(S.players[m.pi].name)}</b><span>${esc(m.short)}</span></div></div>`;
@@ -1106,6 +1165,10 @@ function render(){
       }
     }
     renderModal();
+    const myTurnNow = isMyTurn() && !ui.queue.length;
+    if(myTurnNow && !ui.wasMyTurn) playSound('turn', 250);
+    ui.wasMyTurn = myTurnNow;
+    if(S.over && !ui.endSound){ ui.endSound = true; if(S.final && S.final[0].i === 0) playSound('win', 300); }
   }
 }
 
@@ -1208,6 +1271,7 @@ function menuSheet(){
   <div class="btns"><button class="btn" data-act="rules">Spelregels</button><button class="btn" data-act="cards">Kaartenlijst</button><button class="btn" data-act="log">Verloop van het spel</button></div>
   <div><span style="font-weight:700;display:block;margin-bottom:6px">Tempo van de bots</span><div class="seg">${[['slow','Rustig'],['normal','Normaal'],['fast','Snel']].map(([k, t]) => `<button data-act="set" data-k="speed" data-v="${k}" aria-pressed="${settings.speed === k}">${t}</button>`).join('')}</div></div>
   <label class="check"><input type="checkbox" id="m-big" ${settings.big ? 'checked' : ''}> Grote tekst en kaarten</label>
+  <label class="check"><input type="checkbox" id="m-sound" ${settings.sound ? 'checked' : ''}> Geluid <span class="muted" style="font-weight:400;font-size:.9em">(hoor je niets? zet de stille modus uit)</span></label>
   <div class="btns col"><button class="btn primary" data-act="close">Terug naar het spel</button><button class="btn" data-act="home">Naar het beginscherm</button></div>
   <p class="muted" style="font-size:.9em">Het spel wordt automatisch bewaard in deze browser. Je kunt later verder spelen. · Versie ${APP_VERSION}</p>`;
 }
@@ -1411,7 +1475,10 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('input', e => { if(e.target.id === 'f-name'){ settings.name = e.target.value; save(); } });
-document.addEventListener('change', e => { if(e.target.id === 'f-big' || e.target.id === 'm-big'){ settings.big = e.target.checked; save(); render(); } });
+document.addEventListener('change', e => {
+  if(e.target.id === 'f-big' || e.target.id === 'm-big'){ settings.big = e.target.checked; save(); render(); }
+  if(e.target.id === 'f-sound' || e.target.id === 'm-sound'){ settings.sound = e.target.checked; save(); if(settings.sound){ audioUnlock(); playSound('turn'); } }
+});
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && ui.modal){ ui.modal = null; renderModal(); } });
 
 function startNew(){

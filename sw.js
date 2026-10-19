@@ -1,6 +1,6 @@
 // Service worker: bewaart het spel op het apparaat, zodat het ook zonder internet werkt.
 // Verhoog VERSION bij elke nieuwe versie van het spel.
-const VERSION = 'spb-v8';
+const VERSION = 'spb-v9';
 const APP_FILES = [
   './',
   './index.html',

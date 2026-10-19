@@ -220,6 +220,13 @@ html.groot .mini-wrap{width:62px}
 .ab-msg b{font-size:1.05em}
 .ab-msg span{font-size:.88em;color:#cfe0d6;overflow-wrap:anywhere}
 .ab-btns{display:flex;gap:8px;flex-wrap:wrap}
+.ab-purse{display:flex;align-items:center;gap:12px;background:var(--cream);color:var(--emerald);border-radius:12px;padding:6px 12px;font-weight:700;font-size:1.1em;white-space:nowrap;box-shadow:inset 0 0 0 1.5px var(--gold-hi)}
+.ab-purse .minibill i{width:26px;height:15px}
+.ab-purse small{font-size:.75em;font-weight:400;color:var(--ink-soft)}
+.ab-purse.bump{animation:bump .7s ease-out}
+@keyframes bump{0%{transform:scale(1)}30%{transform:scale(1.12);box-shadow:inset 0 0 0 1.5px var(--gold-hi),0 0 0 4px var(--gold-hi)}100%{transform:scale(1)}}
+@media (max-width:640px){.ab-in{gap:8px}.ab-msg{flex-basis:100%;order:1}.ab-purse{order:2;padding:5px 9px;gap:8px;font-size:1em}.ab-purse small,.ab-purse .minibill i{display:none}.ab-btns{order:3;margin-left:auto;gap:6px}.actionbar .ab-btns .btn{min-height:40px;padding:.35em .75em}}
+@media (prefers-reduced-motion:reduce){.ab-purse.bump{animation:none}}
 .actionbar .btn{border-color:var(--gold-hi);background:transparent;color:var(--cream)}
 .actionbar .btn.primary{background:var(--gold-hi);color:var(--emerald)}
 .actionbar .btn:disabled{opacity:.35}
@@ -420,7 +427,7 @@ const ARI = [0,1,3,6,10,15,21,28,36,45,55];
 const BOT_NAMES = ['Anna','Boris','Katja'];
 const PAWN = ['#b3261e','#5b3a9b','#2e2e2e','#f3efe3'];
 const SAVE_KEY = 'spb-nl-2';
-const APP_VERSION = 8; // ophogen bij elke nieuwe versie
+const APP_VERSION = 9; // ophogen bij elke nieuwe versie
 
 /* ================================================================
    SPELREGELS (engine)
@@ -651,6 +658,9 @@ const W = k => (k === 1 && WP.w1 != null) ? WP.w1 : Math.min(WP.cap, WP.base + W
 const isHard = lvl => lvl !== 'easy' && lvl !== 'medium';
 function estRounds(){
   if(S.lastRound) return 1;
+  // vooruitkijken: raakt een stapel van een latere fase in deze ronde op, dan is dit de laatste ronde
+  const open = Math.max(1, ROW - S.upper.length - S.lower.length);
+  for(let p = S.phase + 1; p < 4; p++) if(S.decks[PH[p].deck].length <= open + 2) return 1;
   let m = 99;
   PH.forEach((ph, pi) => {
     const d = ph.deck;
@@ -683,7 +693,7 @@ function value(p, inst, src, repU, R){
   const bLeft = S.phase <= 1 ? R : R - 1;
   if(c.sp === 'pub') g += bLeft * (R <= 3 ? 1.6 : 0.7);
   if(c.sp === 'obs') g += 0.6 * Math.max(0, bLeft - 1);
-  if(c.sp === 'warehouse') g += p.hand.length >= handLimit(p) ? 1.2 : 0.4;
+  if(c.sp === 'warehouse' && R > 1) g += p.hand.length >= handLimit(p) ? 1.2 : 0.4;
   if(c.sp === 'potemkin') g += R > 2 ? 1.5 : 0;
   return {v: g - cost * W(R - 1), cost};
 }
@@ -693,17 +703,18 @@ function bestAction(pi, lvl){
   const noise = {easy:3, medium:0.9}[lvl] || 0;
   let best = {a:{t:'pass'}, s: isHard(lvl) ? 0.2 : 0.4};
   const acts = legalActions(pi);
+  const buyValue = a => { const inst = (a.src === 'hand' ? p.hand : rowArr(a.src))[a.i]; return value(p, inst, a.src, a.rep, R).v + (a.src === 'hand' ? (R <= 1 ? HAND_PENALTY : 1) : 0); };
   if(lvl === 'easy' && Math.random() < 0.3){
-    const buys = acts.filter(a => a.t === 'buy');
+    // zomaar iets kopen, maar nooit iets dat niets meer kan opleveren
+    const buys = acts.filter(a => a.t === 'buy' && buyValue(a) > (R <= 1 ? 0 : -1.5));
     if(buys.length) return {a:buys[Math.floor(Math.random() * buys.length)], s:1};
   }
   const income = p.cards.reduce((s, x) => s + incomeOf(p, C(x)), 0);
   for(const a of acts){
     let s;
     if(a.t === 'buy'){
-      const inst = (a.src === 'hand' ? p.hand : rowArr(a.src))[a.i];
-      s = value(p, inst, a.src, a.rep, R).v;
-      if(a.src === 'hand') s += R <= 1 ? HAND_PENALTY : 1;
+      s = buyValue(a);
+      if(s <= 0) continue; // toeval mag geen nutteloze aankoop goedpraten
     } else if(a.t === 'take'){
       if(lvl === 'easy' || R <= 1) continue;
       const inst = rowArr(a.src)[a.i];
@@ -1128,6 +1139,7 @@ function renderGame(){
     </section>
   </div>
   <div class="actionbar"><div class="ab-in">
+    <div class="ab-purse${ui.purseKey && ui.purseKey !== me.money + '/' + me.vp ? ' bump' : ''}" aria-label="Jij: ${me.money} roebel, ${me.vp} punten, ${me.hand.length} kaarten in je hand"><span class="minibill num"><i></i>${me.money} ₽</span><span class="num">${me.vp} ★</span><small class="num">hand ${me.hand.length}/${handLimit(me)}</small></div>
     <div class="ab-msg">${S.over ? '' : `<span class="phasepill ${PH[S.phase].key}">${PH[S.phase].name}</span>` + pawnSVG(S.cur, 18)}<div role="status" aria-live="polite"><b>${esc(now)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div></div>
     <div class="ab-btns">
       ${S.over ? `<button class="btn primary" data-act="show-final">Uitslag</button><button class="btn" data-act="again">Nieuw spel</button>` : `
@@ -1141,6 +1153,7 @@ function renderGame(){
 function render(){
   document.documentElement.classList.toggle('groot', !!settings.big);
   if(ui.view === 'start' || !S) renderStart(); else renderGame();
+  if(S) ui.purseKey = S.players[0].money + '/' + S.players[0].vp;
   renderModal();
   if(S && ui.view === 'game'){
     if(S.scoreId !== ui.shownScore && S.lastScore){ ui.shownScore = S.scoreId; ui.queue.push({k:'score'});

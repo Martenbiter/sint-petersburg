@@ -427,7 +427,7 @@ const ARI = [0,1,3,6,10,15,21,28,36,45,55];
 const BOT_NAMES = ['Anna','Boris','Katja'];
 const PAWN = ['#b3261e','#5b3a9b','#2e2e2e','#f3efe3'];
 const SAVE_KEY = 'spb-nl-2';
-const APP_VERSION = 9; // ophogen bij elke nieuwe versie
+const APP_VERSION = 10; // ophogen bij elke nieuwe versie
 
 /* ================================================================
    SPELREGELS (engine)
@@ -499,6 +499,7 @@ function replOptions(p, c){
 function priceParts(p, c, src, rep){
   const parts = [];
   if(src === 'lower') parts.push([1, 'onderste rij']);
+  if(src === 'handlow') parts.push([1, 'uit de onderste rij gepakt']);
   const o = owned(p, c.id); if(o) parts.push([o, `je hebt er al ${o}`]);
   const d = discFor(p, c.type); if(d) parts.push([d, d > 1 ? `${d} kortingskaarten` : (c.type === 'building' ? 'Timmerwerkplaats' : 'Goudsmelterij')]);
   if(rep) parts.push([replValue(C(rep)), `${C(rep).name} ingeleverd`]);
@@ -507,8 +508,10 @@ function priceParts(p, c, src, rep){
 function price(p, c, src, rep){
   return Math.max(1, c.cost - priceParts(p, c, src, rep).reduce((s, x) => s + x[0], 0));
 }
+// huisregel: een kaart die uit de onderste rij in de hand is genomen, houdt zijn 1 ₽ korting
+const srcFor = (inst, src) => (src === 'hand' && inst && inst.low) ? 'handlow' : src;
 function buyOptions(p, inst, src){
-  const c = C(inst);
+  const c = C(inst); src = srcFor(inst, src);
   if(c.trade) return replOptions(p, c).map(r => ({rep:r.u, price:price(p, c, src, r)}));
   return [{rep:null, price:price(p, c, src, null)}];
 }
@@ -546,7 +549,7 @@ function doAction(pi, a){
     const arr = a.src === 'hand' ? p.hand : rowArr(a.src);
     const inst = arr[a.i], c = C(inst);
     const repInst = a.rep ? p.cards.find(x => x.u === a.rep) : null;
-    const cost = price(p, c, a.src, repInst);
+    const cost = price(p, c, srcFor(inst, a.src), repInst);
     if(cost > p.money) return;
     arr.splice(a.i, 1);
     const rep = placeCard(p, inst, a.rep, cost);
@@ -554,6 +557,7 @@ function doAction(pi, a){
     addLog(S.lastAct); note(pi, `${a.src === 'hand' ? 'speelde' : 'kocht'} ${c.name} · ${cost} ₽`, inst.id);
   } else if(a.t === 'take'){
     const inst = rowArr(a.src).splice(a.i, 1)[0];
+    if(a.src === 'lower') inst.low = true;
     p.hand.push(inst);
     S.lastAct = `${p.name} neemt ${C(inst).name} in de hand.`; addLog(S.lastAct); note(pi, `nam ${C(inst).name} in de hand`, inst.id);
   } else if(a.t === 'obs'){
@@ -680,7 +684,7 @@ function incomeVal(p, c, R){
 }
 function value(p, inst, src, repU, R){
   const c = C(inst), rep = repU ? p.cards.find(x => x.u === repU) : null;
-  const cost = price(p, c, src, rep);
+  const cost = price(p, c, srcFor(inst, src), rep);
   let g = incomeVal(p, c, R);
   if(rep) g -= incomeVal(p, C(rep), R);
   if(c.type === 'aristocrat'){
@@ -1230,7 +1234,7 @@ function cardSheet(m){
       const rep = o.rep ? p.cards.find(x => x.u === o.rep) : null, ok = o.price <= p.money;
       const label = rep ? `Vervang ${esc(C(rep).name)} · ${o.price} ₽` : `${src === 'hand' ? 'Spelen' : 'Kopen'} voor ${o.price} ₽`;
       btns.push(`<div style="display:grid;gap:4px"><button class="btn primary" data-act="buy" data-src="${src}" data-i="${m.i}" data-rep="${o.rep || ''}" ${ok ? '' : 'disabled'}>${label}</button>
-        ${o.price !== c.cost ? `<span class="calc">${priceCalc(p, c, src, rep)}</span>` : ''}${ok ? '' : `<span class="reason">Te weinig roebels: je hebt ${p.money} ₽.</span>`}</div>`);
+        ${o.price !== c.cost ? `<span class="calc">${priceCalc(p, c, srcFor(inst, src), rep)}</span>` : ''}${ok ? '' : `<span class="reason">Te weinig roebels: je hebt ${p.money} ₽.</span>`}</div>`);
     });
     if(src !== 'hand'){
       const full = p.hand.length >= handLimit(p);
@@ -1259,7 +1263,7 @@ function rulesSheet(){
   <h3>Telling</h3>
   <p>Na de arbeidersfase krijgt iedereen de roebels en punten van zijn groene kaarten. Na de gebouwenfase die van zijn blauwe kaarten, en na de aristocratenfase die van zijn oranje kaarten. De ruilkaartenfase heeft geen telling. Ruilkaarten tellen mee met hun eigen kleur.</p>
   <h3>Korting</h3>
-  <ul><li>1 ₽ korting voor elke gelijke kaart die je al hebt.</li><li>1 ₽ korting in de onderste rij.</li><li>Timmerwerkplaats: 1 ₽ korting op gebouwen. Goudsmelterij: 1 ₽ korting op aristocraten.</li><li>Een ruilkaart vervangt een gewone kaart (geen andere ruilkaart) van dezelfde kleur. Je betaalt de prijs min de waarde van de oude kaart. Groene ruilkaarten passen alleen op de juiste soort arbeider (of op Tsaar Peter).</li><li>Je betaalt altijd minstens 1 ₽.</li></ul>
+  <ul><li>1 ₽ korting voor elke gelijke kaart die je al hebt.</li><li>1 ₽ korting in de onderste rij. Neem je zo'n kaart in je hand, dan houdt hij die korting.</li><li>Timmerwerkplaats: 1 ₽ korting op gebouwen. Goudsmelterij: 1 ₽ korting op aristocraten.</li><li>Een ruilkaart vervangt een gewone kaart (geen andere ruilkaart) van dezelfde kleur. Je betaalt de prijs min de waarde van de oude kaart. Groene ruilkaarten passen alleen op de juiste soort arbeider (of op Tsaar Peter).</li><li>Je betaalt altijd minstens 1 ₽.</li></ul>
   <h3>Einde van de ronde</h3>
   <p>De onderste rij gaat weg, de bovenste rij schuift naar beneden en de startspelers schuiven één plaats door.</p>
   <h3>Einde van het spel</h3>
@@ -1442,7 +1446,7 @@ function showTip(){
   else if(a.t === 'take'){ const inst = rowArr(a.src)[a.i]; ui.tipU = inst.u; txt = `Tip: neem ${C(inst).name} in je hand, dan kun je hem later kopen.`; }
   else { const inst = (a.src === 'hand' ? p.hand : rowArr(a.src))[a.i]; ui.tipU = inst.u;
     const rep = a.rep ? p.cards.find(x => x.u === a.rep) : null;
-    txt = `Tip: ${a.src === 'hand' ? 'speel' : 'koop'} ${C(inst).name} voor ${price(p, C(inst), a.src, rep)} ₽${rep ? ` en vervang je ${C(rep).name}` : ''}.`; }
+    txt = `Tip: ${a.src === 'hand' ? 'speel' : 'koop'} ${C(inst).name} voor ${price(p, C(inst), srcFor(inst, a.src), rep)} ₽${rep ? ` en vervang je ${C(rep).name}` : ''}.`; }
   S.lastAct = txt;
   render();
 }
